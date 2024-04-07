@@ -77,7 +77,7 @@ class Fan:
 
         # Calculate intermediate static properties after rotor
         [self.T_exit_rotor, self.M_exit_rotor, self.P_exit_rotor, self.rho_exit_rotor] = (
-            self.calc_intermediate_properties(self.T_inlet, self.w_1, self.w_2, self.P0_exit_rotor))
+            self.calc_intermediate_properties(self.v_2, self.T0_exit_rotor, self.P0_exit_rotor))
 
         # Create inlet geometry of stator
         self.A_exit_rotor = self.mdot / (self.v_axial * self.rho_exit_rotor)
@@ -87,7 +87,7 @@ class Fan:
 
         # Calculate intermediate static properties after stator
         [self.T_exit_stator, self.M_exit_stator, self.P_exit_stator, self.rho_exit_stator] = (
-            self.calc_intermediate_properties(self.T_exit_rotor, self.v_2, self.v_axial, self.P0_exit_rotor))
+            self.calc_intermediate_properties(self.v_axial, self.T0_exit_rotor, self.P0_exit_rotor))
 
         # Create outlet geometry of stator
         self.A_exit_stator = self.mdot / (self.v_axial * self.rho_exit_stator)
@@ -146,11 +146,11 @@ class Fan:
         # Plot function
         # Optimization function
 
-    def calc_intermediate_properties(self, T_inlet, w_1, w_2, P0):
-        rothalpy = (self.Cv + self.R_air) * T_inlet + ((w_1**2) / 2)
-        T_exit = (rothalpy - ((w_2**2) / 2)) / (self.Cv + self.R_air)
-        M_exit = self.v_axial / (np.sqrt(self.gamma * self.R_air * T_exit))
-        P_exit = P0 * (1 + (M_exit**2) * ((self.gamma - 1) / 2)) ** (-self.gamma / (self.gamma - 1))
+    def calc_intermediate_properties(self, v_exit, T0_exit, P0_exit):
+        v_exit_norm = v_exit / np.sqrt(self.Cp * T0_exit)
+        M_exit = np.sqrt((1 / (self.gamma - 1)) * (v_exit_norm ** 2 / (1 - 0.5 * v_exit_norm ** 2)))
+        P_exit = P0_exit * (1 + (M_exit ** 2) * ((self.gamma - 1) / 2)) ** (-self.gamma / (self.gamma - 1))
+        T_exit = T0_exit * (1 + (M_exit ** 2) * ((self.gamma - 1) / 2)) ** (-1)
         rho_exit = P_exit / (self.R_air * T_exit)
         return [T_exit, M_exit, P_exit, rho_exit]
 
