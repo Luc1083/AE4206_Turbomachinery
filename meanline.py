@@ -309,6 +309,8 @@ class Fan_Plots:
                           label="Stator - alpha_1")
         angles_graph.plot(self.Fan.r_stator, self.Fan.alpha_2_stator_distribution * 180 / np.pi,
                           label="Stator - alpha_2")
+        angles_graph.axvline(self.Fan.r_mean_rotor, linestyle='--', label="Rotor meanline radius", color="red")
+        angles_graph.axvline(self.Fan.r_mean_inlet_stator, linestyle='--', label="Stator meanline radius")
         angles_graph.set_xlabel("Radius (m)")
         angles_graph.set_ylabel("Angles (deg)")
         angles_graph.set_title("Distribution of angles along blade radius")
@@ -316,7 +318,7 @@ class Fan_Plots:
         angles_graph.minorticks_on()
         angles_graph.grid(which='major', color='#DDDDDD', linewidth=0.8)
         angles_graph.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.8)
-        angles_graph.legend()
+        angles_graph.legend(loc="upper left")
 
         properties_rotor_graph = fig.add_subplot(212)
         properties_rotor_graph.plot(self.Fan.r_rotor, self.Fan.theta_rotor_distribution, label="theta")
@@ -324,6 +326,8 @@ class Fan_Plots:
         properties_rotor_graph.plot(self.Fan.r_rotor, self.Fan.R_rotor_distribution, label="R")
         properties_rotor_graph.plot(self.Fan.r_rotor, self.Fan.DF_rotor_distribution, label="DF - rotor")
         properties_rotor_graph.plot(self.Fan.r_stator, self.Fan.DF_stator_distribution, label="DF - stator")
+        properties_rotor_graph.axvline(self.Fan.r_mean_rotor, linestyle='--', label="Rotor meanline radius", color="red")
+        properties_rotor_graph.axvline(self.Fan.r_mean_inlet_stator, linestyle='--', label="Stator meanline radius")
         properties_rotor_graph.set_xlabel("Radius (m)")
         properties_rotor_graph.set_ylabel("Value (-)")
         properties_rotor_graph.set_title("Distribution of stage coefficients along rotor blade radius")
@@ -331,7 +335,7 @@ class Fan_Plots:
         properties_rotor_graph.minorticks_on()
         properties_rotor_graph.grid(which='major', color='#DDDDDD', linewidth=0.8)
         properties_rotor_graph.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.8)
-        properties_rotor_graph.legend()
+        properties_rotor_graph.legend(loc="upper left")
 
         plt.savefig(f'distribution_along_blade.png')
         plt.show()
