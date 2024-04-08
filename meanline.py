@@ -62,110 +62,133 @@ class Fan:
         self.theta = self.v_axial / self.U_mean
 
         # Here convergence loop should be started based on convergence of eta_tt
-        # Calculate intermediate total properties
-        self.P0_exit_rotor = self.betta_tt * self.P0_inlet
-        self.T0s_exit_rotor = self.T0_inlet * self.betta_tt ** ((self.gamma - 1) / self.gamma)
-        self.T0_exit_rotor = (self.T0s_exit_rotor - self.T0_inlet) / eta_tt_estimated + self.T0_inlet
-        self.psi_mean = (self.T0s_exit_rotor - self.T0_inlet) * self.Cp / (self.U_mean ** 2)
+        difference = 1
+        while difference > 1e-2:
+            # Calculate intermediate total properties
+            self.P0_exit_rotor = self.betta_tt * self.P0_inlet
+            self.T0s_exit_rotor = self.T0_inlet * self.betta_tt ** ((self.gamma - 1) / self.gamma)
+            self.T0_exit_rotor = (self.T0s_exit_rotor - self.T0_inlet) / eta_tt_estimated + self.T0_inlet
+            self.psi_mean = (self.T0s_exit_rotor - self.T0_inlet) * self.Cp / (self.U_mean ** 2)
 
-        # Calculate angles, velocities at the meanline
-        self.beta_1 = np.arctan(- 1 / self.theta)
-        self.R_mean = - self.psi_mean / 2 + 1
-        self.beta_2 = np.arctan((self.psi_mean - 1) / self.theta)
-        self.alpha_2 = np.arctan(np.tan(self.beta_2) + 1 / self.theta)
-        self.w_1 = self.v_axial / np.cos(self.beta_1)
-        self.v_2 = self.v_axial / np.cos(self.alpha_2)
-        self.w_2 = self.v_axial / np.cos(self.beta_2)
+            # Calculate angles, velocities at the meanline
+            self.beta_1 = np.arctan(- 1 / self.theta)
+            self.R_mean = - self.psi_mean / 2 + 1
+            self.beta_2 = np.arctan((self.psi_mean - 1) / self.theta)
+            self.alpha_2 = np.arctan(np.tan(self.beta_2) + 1 / self.theta)
+            self.w_1 = self.v_axial / np.cos(self.beta_1)
+            self.v_2 = self.v_axial / np.cos(self.alpha_2)
+            self.w_2 = self.v_axial / np.cos(self.beta_2)
 
-        # Calculate intermediate static properties after rotor
-        [self.T_exit_rotor, self.M_exit_rotor, self.P_exit_rotor, self.rho_exit_rotor] = (
-            self.calc_intermediate_properties(self.v_2, self.T0_exit_rotor, self.P0_exit_rotor))
+            # Calculate intermediate static properties after rotor
+            [self.T_exit_rotor, self.M_exit_rotor, self.P_exit_rotor, self.rho_exit_rotor] = (
+                self.calc_intermediate_properties(self.v_2, self.T0_exit_rotor, self.P0_exit_rotor))
 
-        # Create inlet geometry of stator
-        self.A_exit_rotor = self.mdot / (self.v_axial * self.rho_exit_rotor)
-        [self.r_hub_inlet_stator, self.r_mean_inlet_stator, self.h_blade_inlet_stator, self.c_mean_stator,
-         self.s_mean_stator, self.c_tip_stator, self.c_hub_stator, self.stator_solidity_mean] = (
-            self.calc_stator_geometry(self.A_exit_rotor))
-        self.c_mean_rotor_outlet = (((self.r_mean_inlet_stator - self.r_hub_inlet_stator) / self.h_blade_inlet_stator) *
-                             (self.c_tip_rotor - self.c_hub_rotor) + self.c_hub_rotor)
+            # Create inlet geometry of stator
+            self.A_exit_rotor = self.mdot / (self.v_axial * self.rho_exit_rotor)
+            [self.r_hub_inlet_stator, self.r_mean_inlet_stator, self.h_blade_inlet_stator, self.c_mean_stator,
+             self.s_mean_stator, self.c_tip_stator, self.c_hub_stator, self.stator_solidity_mean] = (
+                self.calc_stator_geometry(self.A_exit_rotor))
+            self.c_mean_rotor_outlet = (((self.r_mean_inlet_stator - self.r_hub_inlet_stator) / self.h_blade_inlet_stator) *
+                                 (self.c_tip_rotor - self.c_hub_rotor) + self.c_hub_rotor)
 
-        # Calculate intermediate static properties after stator
-        [self.T_exit_stator, self.M_exit_stator, self.P_exit_stator, self.rho_exit_stator] = (
-            self.calc_intermediate_properties(self.v_axial, self.T0_exit_rotor, self.P0_exit_rotor))
+            # Calculate intermediate static properties after stator
+            [self.T_exit_stator, self.M_exit_stator, self.P_exit_stator, self.rho_exit_stator] = (
+                self.calc_intermediate_properties(self.v_axial, self.T0_exit_rotor, self.P0_exit_rotor))
 
-        # Create outlet geometry of stator
-        self.A_exit_stator = self.mdot / (self.v_axial * self.rho_exit_stator)
-        [self.r_hub_outlet_stator, self.r_mean_outlet_stator, self.h_blade_outlet_stator, self.c_mean_stator_outlet] \
-            = self.calc_stator_geometry(self.A_exit_stator)[0:4]
+            # Create outlet geometry of stator
+            self.A_exit_stator = self.mdot / (self.v_axial * self.rho_exit_stator)
+            [self.r_hub_outlet_stator, self.r_mean_outlet_stator, self.h_blade_outlet_stator, self.c_mean_stator_outlet] \
+                = self.calc_stator_geometry(self.A_exit_stator)[0:4]
 
-        # Create all intermediate geometry, first for rotor
-        self.x_rotor_hub_inlet = 0
+            # Create all intermediate geometry, first for rotor
+            self.x_rotor_hub_inlet = 0
 
-        [c_dummy, self.x_rotor_hub_outlet, self.x_rotor_tip_inlet, self.x_rotor_tip_outlet, self.x_rotor_mean_inlet,
-         self.x_rotor_mean_outlet] = \
-            (self.calc_intermediate_geometry(x_inlet=self.x_rotor_hub_inlet, r_hub_inlet=self.r_hub_inlet_rotor,
-                                             r_hub_outlet=self.r_hub_inlet_stator, c_hub=self.c_hub_rotor,
-                                             c_tip=self.c_tip_rotor, h=self.h_blade_rotor,
-                                             c_mean_inlet=self.c_mean_rotor, c_mean_outlet=self.c_mean_rotor_outlet))
-        self.spacing_rows = self.c_mean_rotor / self.row_chord_spacing_ratio
+            [c_dummy, self.x_rotor_hub_outlet, self.x_rotor_tip_inlet, self.x_rotor_tip_outlet, self.x_rotor_mean_inlet,
+             self.x_rotor_mean_outlet] = \
+                (self.calc_intermediate_geometry(x_inlet=self.x_rotor_hub_inlet, r_hub_inlet=self.r_hub_inlet_rotor,
+                                                 r_hub_outlet=self.r_hub_inlet_stator, c_hub=self.c_hub_rotor,
+                                                 c_tip=self.c_tip_rotor, h=self.h_blade_rotor,
+                                                 c_mean_inlet=self.c_mean_rotor, c_mean_outlet=self.c_mean_rotor_outlet))
+            self.spacing_rows = self.c_mean_rotor / self.row_chord_spacing_ratio
 
-        # Then for stator
-        self.x_stator_hub_inlet = self.x_rotor_hub_outlet + self.spacing_rows
+            # Then for stator
+            self.x_stator_hub_inlet = self.x_rotor_hub_outlet + self.spacing_rows
 
-        [self.x_stator_hub_outlet, self.x_stator_tip_inlet, self.x_stator_tip_outlet, self.x_stator_mean_inlet,
-         self.x_stator_mean_outlet] = (
-            self.calc_intermediate_geometry(x_inlet=self.x_stator_hub_inlet, r_hub_inlet=self.r_hub_inlet_stator,
-                                            r_hub_outlet=self.r_hub_outlet_stator, c_hub=self.c_hub_stator,
-                                            c_tip=self.c_tip_stator, h=self.h_blade_inlet_stator,
-                                            c_mean_inlet=self.c_mean_stator, c_mean_outlet=self.c_mean_stator_outlet)[1:])
+            [self.x_stator_hub_outlet, self.x_stator_tip_inlet, self.x_stator_tip_outlet, self.x_stator_mean_inlet,
+             self.x_stator_mean_outlet] = (
+                self.calc_intermediate_geometry(x_inlet=self.x_stator_hub_inlet, r_hub_inlet=self.r_hub_inlet_stator,
+                                                r_hub_outlet=self.r_hub_outlet_stator, c_hub=self.c_hub_stator,
+                                                c_tip=self.c_tip_stator, h=self.h_blade_inlet_stator,
+                                                c_mean_inlet=self.c_mean_stator, c_mean_outlet=self.c_mean_stator_outlet)[1:])
 
-        # Find parameters a or b for given methodology
-        self.vt_2 = self.v_2 * np.sin(self.alpha_2)
-        if self.methodology == "controlled vortex":
-            self.b_rotor = self.r_mean_rotor * self.vt_2 / 2
-            self.a_rotor = self.vt_2 / (2 * self.r_mean_rotor ** n)
-        elif self.methodology == "free vortex":
-            self.b_rotor = self.vt_2 / (self.r_mean_rotor ** self.n)
-            self.a_rotor = 0
+            # Find parameters a or b for given methodology
+            self.vt_2 = self.v_2 * np.sin(self.alpha_2)
+            if self.methodology == "controlled vortex":
+                self.b_rotor = self.r_mean_rotor * self.vt_2 / 2
+                self.a_rotor = self.vt_2 / (2 * self.r_mean_rotor ** n)
+            elif self.methodology == "free vortex":
+                self.b_rotor = self.vt_2 / (self.r_mean_rotor ** self.n)
+                self.a_rotor = 0
 
-        # Find parameters for stator
-        if self.methodology == "controlled vortex":
-            self.b_stator = - self.v_2 * np.sin(self.alpha_2) * self.r_mean_rotor / 2
-            self.a_stator = self.v_2 * np.sin(self.alpha_2) / (2 * self.r_mean_rotor ** n)
-        elif self.methodology == "free vortex":
-            self.a_stator = self.vt_2 / (self.r_mean_rotor ** self.n)
-            self.b_stator = 0
+            # Find parameters for stator
+            if self.methodology == "controlled vortex":
+                self.b_stator = - self.v_2 * np.sin(self.alpha_2) * self.r_mean_rotor / 2
+                self.a_stator = self.v_2 * np.sin(self.alpha_2) / (2 * self.r_mean_rotor ** n)
+            elif self.methodology == "free vortex":
+                self.a_stator = self.vt_2 / (self.r_mean_rotor ** self.n)
+                self.b_stator = 0
 
-        # Calculate distribution of angles and velocities for rotor
-        self.r_rotor = np.linspace(self.r_hub_inlet_rotor, self.r_tip, self.no_points)
-        [self.alpha_1_rotor_distribution, self.beta_1_rotor_distribution, self.U_rotor_distribution,
-         self.w_1_rotor_distribution, self.v_2_rotor_distribution, self.alpha_2_rotor_distribution,
-         self.w_2_rotor_distribution, self.beta_2_rotor_distribution, self.theta_rotor_distribution,
-         self.psi_rotor_distribution, self.R_rotor_distribution, self.solidity_rotor_distribution,
-         self.DF_rotor_distribution, self.Mach_rotor] = self.calc_angle_distribution_rotor(self.a_rotor, self.b_rotor,
-                                                                                           self.r_rotor,
-                                                                                           self.methodology)
+            # Calculate distribution of angles and velocities for rotor
+            self.r_rotor = np.linspace(self.r_hub_inlet_rotor, self.r_tip, self.no_points)
+            [self.alpha_1_rotor_distribution, self.beta_1_rotor_distribution, self.U_rotor_distribution,
+             self.w_1_rotor_distribution, self.v_2_rotor_distribution, self.alpha_2_rotor_distribution,
+             self.w_2_rotor_distribution, self.beta_2_rotor_distribution, self.theta_rotor_distribution,
+             self.psi_rotor_distribution, self.R_rotor_distribution, self.solidity_rotor_distribution,
+             self.DF_rotor_distribution, self.Mach_rotor] = self.calc_angle_distribution_rotor(self.a_rotor, self.b_rotor,
+                                                                                               self.r_rotor,
+                                                                                               self.methodology)
 
-        # Calculate distribution of angles and velocities for stator
-        self.r_stator = np.linspace(self.r_hub_inlet_stator, self.r_tip, self.no_points)
-        [self.alpha_2_stator_distribution, self.v_2_stator_distribution, self.alpha_1_stator_distribution,
-         self.solidity_stator_distribution, self.DF_stator_distribution, self.Mach_stator] = (
-            self.calc_angle_distribution_stator(self.a_stator, self.b_stator, self.r_stator, self.methodology))
+            # Calculate distribution of angles and velocities for stator
+            self.r_stator = np.linspace(self.r_hub_inlet_stator, self.r_tip, self.no_points)
+            [self.alpha_2_stator_distribution, self.v_2_stator_distribution, self.alpha_1_stator_distribution,
+             self.solidity_stator_distribution, self.DF_stator_distribution, self.Mach_stator] = (
+                self.calc_angle_distribution_stator(self.a_stator, self.b_stator, self.r_stator, self.methodology))
 
-        # Get t_c along radius, mass of the blade for stator, rotor
-        # [self.t_c_stator, self.stator_blade_mass] = self.size_stator_thicknes()
-        # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
+            # Get t_c along radius, mass of the blade for stator, rotor
+            # [self.t_c_stator, self.stator_blade_mass] = self.size_stator_thicknes()
+            # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
 
-        # Calculate blade geometry, flow deviation and iterate for both rotor and stator
-        # Create arrays with real blade angles, starting with ideal angles
-        # Start while loop until error between ideal and real angles is sufficiently small
-        # Get deviation along the blade based on beta1, tc
-        # Calculate new real angle
-        # Iterate until max error between ideal and real angle array is small enough
+            # For the sake of testing assume constant tc
+            self.t_c_rotor = np.ones(self.no_points) * 0.05
+            self.t_c_stator = np.ones(self.no_points) * 0.05
 
-        # Calculate losses
-        # Update eta
-        # Iterate until convergence
+            # Calculate flow incidence, deviation, blade angles for both rotor and stator
+            # Create array with ideal flow deflection for rotor
+            self.delta_beta = np.abs(self.beta_1_rotor_distribution - self.beta_2_rotor_distribution)
+            # Get values for rotor
+            self.i_rotor, self.delta_rotor, self.theta_rotor = (
+                self.lieblein_model.get_deviation_angle(beta_1=np.abs(self.beta_1_rotor_distribution * 180/np.pi),
+                                                        delta_beta=self.delta_beta * 180/np.pi,
+                                                        solidity=self.solidity_rotor_distribution, t_c=self.t_c_rotor,
+                                                        profile=self.profile))
+            self.rotor_blade_beta1 = self.beta_1_rotor_distribution - self.i_rotor * np.pi / 180
+            self.rotor_blade_beta2 = self.beta_2_rotor_distribution + self.delta_rotor * np.pi / 180
+
+            # Create array with ideal flow deflection for rotor
+            self.delta_alpha = np.abs(self.alpha_1_stator_distribution - self.alpha_2_stator_distribution)
+            self.i_stator, self.delta_stator, self.theta_stator = (
+                self.lieblein_model.get_deviation_angle(beta_1=np.abs(self.alpha_1_stator_distribution * 180 / np.pi),
+                                                        delta_beta=self.delta_alpha * 180 / np.pi,
+                                                        solidity=self.solidity_stator_distribution, t_c=self.t_c_rotor,
+                                                        profile=self.profile))
+            self.stator_blade_beta1 = self.alpha_1_stator_distribution - self.i_stator * np.pi / 180
+            self.stator_blade_beta2 = self.alpha_2_stator_distribution + self.delta_stator * np.pi / 180
+
+            # Calculate losses
+            # Update eta
+            new_eta_tt = 0.9
+            difference = np.abs(new_eta_tt - eta_tt_estimated)
+            eta_tt_estimated = new_eta_tt
 
     def calc_intermediate_geometry(self, x_inlet, r_hub_inlet, r_hub_outlet, c_mean_inlet, c_mean_outlet, h, c_tip,
                                    c_hub):
@@ -359,13 +382,17 @@ class Fan_Plots:
 
         angles_graph = fig.add_subplot(211)
         angles_graph.plot(self.Fan.r_rotor, self.Fan.alpha_1_rotor_distribution * 180 / np.pi,
-                          label="Rotor - alpha_1")
+                          label="Fluid flow - alpha_1")
         angles_graph.plot(self.Fan.r_rotor, self.Fan.alpha_2_rotor_distribution * 180 / np.pi,
-                          label="Rotor - alpha_2")
+                          label="Fluid flow - alpha_2")
         angles_graph.plot(self.Fan.r_rotor, self.Fan.beta_1_rotor_distribution * 180 / np.pi,
-                          label="Rotor - beta_1")
+                          label="Fluid flow - beta_1")
         angles_graph.plot(self.Fan.r_rotor, self.Fan.beta_2_rotor_distribution * 180 / np.pi,
-                          label="Rotor - beta_2")
+                          label="Fluid flow - beta_2")
+        angles_graph.plot(self.Fan.r_rotor, self.Fan.rotor_blade_beta1 * 180 / np.pi,
+                          label="Blade angle - beta_1", linestyle='--')
+        angles_graph.plot(self.Fan.r_rotor, self.Fan.rotor_blade_beta2 * 180 / np.pi,
+                          label="Blade angle - beta_2", linestyle='--')
         # angles_graph.plot(self.Fan.r_stator, self.Fan.alpha_1_stator_distribution * 180 / np.pi,
         #                   label="Stator - alpha_1")
         # angles_graph.plot(self.Fan.r_stator, self.Fan.alpha_2_stator_distribution * 180 / np.pi,
