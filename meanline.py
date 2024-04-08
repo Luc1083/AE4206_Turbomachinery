@@ -166,7 +166,7 @@ class Fan:
             # Create array with ideal flow deflection for rotor
             self.delta_beta = np.abs(self.beta_1_rotor_distribution - self.beta_2_rotor_distribution)
             # Get values for rotor
-            self.i_rotor, self.delta_rotor, self.theta_rotor = (
+            self.i_rotor, self.delta_rotor, self.chamber_angle_rotor = (
                 self.lieblein_model.get_deviation_angle(beta_1=np.abs(self.beta_1_rotor_distribution * 180/np.pi),
                                                         delta_beta=self.delta_beta * 180/np.pi,
                                                         solidity=self.solidity_rotor_distribution, t_c=self.t_c_rotor,
@@ -174,9 +174,10 @@ class Fan:
             self.rotor_blade_beta1 = self.beta_1_rotor_distribution - self.i_rotor * np.pi / 180
             self.rotor_blade_beta2 = self.beta_2_rotor_distribution + self.delta_rotor * np.pi / 180
 
+
             # Create array with ideal flow deflection for rotor
             self.delta_alpha = np.abs(self.alpha_1_stator_distribution - self.alpha_2_stator_distribution)
-            self.i_stator, self.delta_stator, self.theta_stator = (
+            self.i_stator, self.delta_stator, self.chamber_angle_stator = (
                 self.lieblein_model.get_deviation_angle(beta_1=np.abs(self.alpha_1_stator_distribution * 180 / np.pi),
                                                         delta_beta=self.delta_alpha * 180 / np.pi,
                                                         solidity=self.solidity_stator_distribution, t_c=self.t_c_rotor,
