@@ -1,10 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
+import 
 
 
 def optimize_design():
-    ...
+
+# Minimise (1 - eta_tt_estimated)
+
+# Minimise frontal area (pi() * r_tip ** 2)
+
+# Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
+
+# Constraints:
+
+
 
 
 class Fan:
