@@ -1,20 +1,44 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
-import 
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
 
-
-def optimize_design():
-
-# Minimise (1 - eta_tt_estimated)
-
-# Minimise frontal area (pi() * r_tip ** 2)
 
 # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
 
 # Constraints:
 
+# Optimisation Structure:
+#   1. Problem
+#   2. Algorithm
+#   3. Stop Criteria
 
+class optimize_design(Problem):
+
+    def __init__(self):
+        super().__init__(n_var = 0,
+                         n_obj = 0,
+                         n_ieq_constr = 0,
+                         xl = np.array([0,0,0]),
+                         xu = np.array([0,0,0]))
+    
+    def _evaluate(self, x, out, *args, **kwargs):
+
+        design = fan()
+
+        # Objective functions
+        obj1 = 0 # Minimise (1 - eta_tt_estimated)
+        obj2 = 0 # Minimise frontal area (pi() * r_tip ** 2)
+        obj3 = 0 # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
+
+        # Constraints, default orientation of constraints being met is < 0
+        const1 = 0
+        const2 = 0
+
+        # Stacking Objectives to "F" and Constraints to "G"
+        out["F"] = np.column_stack([obj1, obj2, obj3])
+        out["G"] = np.column_stack([const1, const2])
 
 
 class Fan:

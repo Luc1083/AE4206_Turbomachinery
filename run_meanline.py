@@ -1,4 +1,6 @@
 import meanline as ml
+from pymoo.optimize import minimize
+from pymoo.algorithms.moo.nsga2 import NSGA2
 
 lieblein_model = ml.Lieblein_Model()
 lieblein_model.plot_graphs(beta_start=0, beta_end=80, solidity_start=0.2, solidity_end=2.2, no_points_beta=20,
@@ -11,3 +13,10 @@ fan = ml.Fan(Mach_inlet=0.6, AR_rotor=10, AR_stator=10, taper_rotor=0.7, taper_s
              row_chord_spacing_ratio=0.5, lieblein_model=lieblein_model, profile="NACA-65",
              methodology="controlled vortex")
 ml.Fan_Plots(fan)
+
+algorithm = NSGA2(pop_size = 200)
+fan_optimisation_problem = ml.optimise_design()
+result = minimize(problem = fan_optimisation_problem,
+                  algorithm = algorithm,
+                  seed=1,
+                  verbose=False)
