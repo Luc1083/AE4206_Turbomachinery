@@ -4,9 +4,8 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.termination import get_termination
 
 lieblein_model = ml.Lieblein_Model()
-lieblein_model.plot_graphs(beta_start=0, beta_end=80, solidity_start=0.2, solidity_end=2.2, no_points_beta=20,
-                           delta_solidity=0.2, tc_start=0, tc_end=0.2, no_points_tc=20)
-
+# lieblein_model.plot_graphs(beta_start=0, beta_end=80, solidity_start=0.2, solidity_end=2.2, no_points_beta=20,
+                           # delta_solidity=0.2, tc_start=0, tc_end=0.2, no_points_tc=20)
 
 fan = ml.Fan(Mach_inlet=0.6, AR_rotor=10, AR_stator=10, taper_rotor=0.7, taper_stator=0.5, n=1, no_blades_rotor=30,
              no_blades_stator=60, beta_tt=1.6, P0_cruise=39513.14, rho=0.59, dyn_visc=15.6E-6, T0_cruise=250.13, mdot=80, omega=5000,
