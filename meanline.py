@@ -2,10 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
 from pymoo.core.problem import Problem
-from pymoo.algorithms.moo.nsga2 import NSGA2
-
-
-# Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
 
 # Constraints:
 
@@ -25,12 +21,12 @@ class optimize_design(Problem):
     
     def _evaluate(self, x, out, *args, **kwargs):
 
-        design = fan()
+        design = Fan(x)
 
         # Objective functions
-        obj1 = 0 # Minimise (1 - eta_tt_estimated)
-        obj2 = 0 # Minimise frontal area (pi() * r_tip ** 2)
-        obj3 = 0 # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
+        obj1 = design.eta_tt_estimated # Minimise (1 - eta_tt_estimated)
+        obj2 = np.pi() * design.r_tip ** 2 # Minimise frontal area (pi() * r_tip ** 2)
+        obj3 = design.weight # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
 
         # Constraints, default orientation of constraints being met is < 0
         const1 = 0
@@ -40,7 +36,18 @@ class optimize_design(Problem):
         out["F"] = np.column_stack([obj1, obj2, obj3])
         out["G"] = np.column_stack([const1, const2])
 
+class optimize_plots:
+    def __init__(self, result):
+        X = result.X
+        F = result.F
+    def pareto_front_scatter3(self):
+        plt.scatter3(self.F[:,0], self.F[:,1], self.F[:,2])
+    def pareto_front_scatter2(self):
+        plt.scatter(self.F[:,0], self.F[:,1])
 
+class multi_criteria_decision_making:
+    X = 0 
+    
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
                  beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air, eta_tt_estimated, Cp_air,
