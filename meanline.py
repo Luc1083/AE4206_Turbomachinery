@@ -22,6 +22,7 @@ class optimize_design(Problem):
                          xu=np.array([0, 0, 0]))
 
     def _evaluate(self, x, out, *args, **kwargs):
+
         design = Fan(x)
 
         # Objective functions
@@ -30,8 +31,8 @@ class optimize_design(Problem):
         obj3 = design.weight  # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = 0
-        const2 = 0
+        const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
+        const2 = np.abs(design.CV_residual_stator) - 1e-6
 
         # Stacking Objectives to "F" and Constraints to "G"
         out["F"] = np.column_stack([obj1, obj2, obj3])
@@ -112,6 +113,10 @@ class Fan:
         # Calculate theta
         self.U_mean = self.r_mean_rotor * omega * 2 * np.pi / 60
         self.theta = self.v_axial / self.U_mean
+
+        # Calculate residual for rotor & stator
+        self.CV_residual_rotor = self.calc_stall_margin(self)
+        self.CV_residual_stator = self.calc_stall_margin(self)
 
         # Here convergence loop should be started based on convergence of eta_tt
         difference = 1
@@ -468,8 +473,15 @@ class Fan:
     def calc_shock_loss(self):
         ...
 
-    def calc_stall_margin(self):
-        ...
+    def calc_stall_margin(self, mach_rel_out, mach_rel_in,t_th, beta, beta_blade):
+        # This function uses control volume method based off of C.Freeman's paper
+        lhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_out ** 2)) ** (- 1 / 2)) * \
+          (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_th)) / (mach_rel_out * (1 - t_th))
+        rhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_in ** 2)) ** (- 1 / 2)) * \
+          (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
+        residual = lhs - rhs
+        return residual
+
 
 
 class Fan_Plots:
