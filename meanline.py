@@ -1,12 +1,53 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
+from pymoo.core.problem import Problem
 
+# Constraints:
 
-def optimize_design():
-    ...
+# Optimisation Structure:
+#   1. Problem
+#   2. Algorithm
+#   3. Stop Criteria
 
+class optimize_design(Problem):
 
+    def __init__(self):
+        super().__init__(n_var = 0,
+                         n_obj = 0,
+                         n_ieq_constr = 0,
+                         xl = np.array([0,0,0]),
+                         xu = np.array([0,0,0]))
+    
+    def _evaluate(self, x, out, *args, **kwargs):
+
+        design = Fan(x)
+
+        # Objective functions
+        obj1 = design.eta_tt_estimated # Minimise (1 - eta_tt_estimated)
+        obj2 = np.pi() * design.r_tip ** 2 # Minimise frontal area (pi() * r_tip ** 2)
+        obj3 = design.weight # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
+
+        # Constraints, default orientation of constraints being met is < 0
+        const1 = 0
+        const2 = 0
+
+        # Stacking Objectives to "F" and Constraints to "G"
+        out["F"] = np.column_stack([obj1, obj2, obj3])
+        out["G"] = np.column_stack([const1, const2])
+
+class optimize_plots:
+    def __init__(self, result):
+        X = result.X
+        F = result.F
+    def pareto_front_scatter3(self):
+        plt.scatter3(self.F[:,0], self.F[:,1], self.F[:,2])
+    def pareto_front_scatter2(self):
+        plt.scatter(self.F[:,0], self.F[:,1])
+
+class multi_criteria_decision_making:
+    X = 0 
+    
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
                  beta_tt, P0_cruise,rho, dyn_visc, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air, eta_tt_estimated, Cp_air,
@@ -168,7 +209,7 @@ class Fan:
             # Create array with ideal flow deflection for rotor
             self.delta_beta = np.abs(self.beta_1_rotor_distribution - self.beta_2_rotor_distribution)
             # Get values for rotor
-            self.i_rotor, self.delta_rotor, self.theta_rotor = (
+            self.i_rotor, self.delta_rotor, self.chamber_angle_rotor = (
                 self.lieblein_model.get_deviation_angle(beta_1=np.abs(self.beta_1_rotor_distribution * 180/np.pi),
                                                         delta_beta=self.delta_beta * 180/np.pi,
                                                         solidity=self.solidity_rotor_distribution, t_c=self.t_c_rotor,
@@ -176,9 +217,10 @@ class Fan:
             self.rotor_blade_beta1 = self.beta_1_rotor_distribution - self.i_rotor * np.pi / 180
             self.rotor_blade_beta2 = self.beta_2_rotor_distribution + self.delta_rotor * np.pi / 180
 
+
             # Create array with ideal flow deflection for rotor
             self.delta_alpha = np.abs(self.alpha_1_stator_distribution - self.alpha_2_stator_distribution)
-            self.i_stator, self.delta_stator, self.theta_stator = (
+            self.i_stator, self.delta_stator, self.chamber_angle_stator = (
                 self.lieblein_model.get_deviation_angle(beta_1=np.abs(self.alpha_1_stator_distribution * 180 / np.pi),
                                                         delta_beta=self.delta_alpha * 180 / np.pi,
                                                         solidity=self.solidity_stator_distribution, t_c=self.t_c_rotor,
