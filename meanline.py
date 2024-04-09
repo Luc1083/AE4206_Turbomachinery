@@ -235,8 +235,11 @@ class Fan:
             self.dn_ml=sum(self.calc_mixing_loss(np.mean(self.DF_rotor_distribution),np.mean(self.DF_stator_distribution),
                                              self.stator_solidity_mean,self.rotor_solidity_mean,np.mean(self.beta_1),
                                              np.mean(self.alpha_2),self.theta,self.psi_mean,np.mean(self.beta_2),0,self.rho,self.dyn_visc,self.w_1,self.w_2,self.c_mean_stator,self.c_mean_rotor,np.mean(self.Mach_rotor),np.mean(self.Mach_stator)))
+            self.dn_tl=sum(self.calc_tip_leakage_loss(self.h_blade_rotor,self.rotor_solidity_mean,self.beta_1,self.theta,self.psi_mean,self.beta_2,self.rho,
+                                                      self.dyn_visc,self.w_1,self.c_mean_rotor,self.Mach_rotor))
             print(self.dn_bl)
             print(self.dn_ml)
+            print(self.dn_tl)
             # Update eta
             new_eta_tt = 0.9
             difference = np.abs(new_eta_tt - eta_tt_estimated)
@@ -352,6 +355,7 @@ class Fan:
                                                                                      ((1-D_rotor)**3)/(np.cos(alpha_m_rotor)**2)))
         dn_stator=(theta**2/psi)*((M_stator-1+D_stator+(1-D_stator)**2)*(1-D_stator)+0.5*(((1-D_stator-K_stator)/(np.cos(alpha_3)**2))-
                                                                                      ((1-D_stator)**3)/(np.cos(alpha_m_stator)**2)))
+        
         return [dn_rotor,dn_stator]
 
     def calc_BL_loss(self,DF_stator,DF_rotor,solidity_stator,solidity_rotor,beta_1,alpha_2,theta,psi,beta_2,alpha_3):
@@ -366,8 +370,24 @@ class Fan:
     def calc_endwall_loss(self):
         ...
 
-    def calc_tip_leakage_loss(self):
-        ...
+    def calc_tip_leakage_loss(self,h_blade_rotor,solidity_rotor,beta_1,theta,psi,beta_2,
+                         rho,dynamic_viscosity,w1,chord_rotor,mach_rotor):
+        Cs_c_rotor=(0.5*(beta_1-beta_2))/(np.sin(0.5*(beta_1-beta_2)))
+        Re_rotor=(rho*w1*chord_rotor)/dynamic_viscosity
+        Deq_rotor=(np.cos(beta_2)/np.cos(beta_1))*(1.12+0.61*((np.cos(beta_1))**2/solidity_rotor)*(np.tan(beta_2)-np.tan(beta_1)))
+        momentum_thickness_rotor=(0.0045/(1-0.95*np.log(Deq_rotor)))
+        M_rotor=(momentum_thickness_rotor)*(solidity_rotor/(np.cos(beta_2)))
+        displacement_thickness_rotor=0.046*(1+0.8*mach_rotor**2)**0.44*Re_rotor**(-0.2)
+        D_rotor=(displacement_thickness_rotor)*(solidity_rotor/(np.cos(beta_2)))
+        alpha_m_rotor=np.arctan(np.tan(beta_2)*((1-D_rotor-M_rotor))/(1-D_rotor)**2)
+        staggerangle_rotor=np.arctan(np.tan(alpha_m_rotor)-0.213)
+        clearance_gap=0.1E-2
+        Cd=0.002
+        dn=Cd*(clearance_gap/(h_blade_rotor))*Cs_c_rotor*(2*theta*np.sqrt(psi)*(psi*np.cos(staggerangle_rotor+2*theta*solidity_rotor)))/(2*theta*solidity_rotor*np.cos(staggerangle_rotor))**(3/2)
+        print(clearance_gap/(h_blade_rotor))
+        return dn
+        
+
 
     def calc_shock_loss(self):
         ...
