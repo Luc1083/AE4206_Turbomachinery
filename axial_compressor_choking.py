@@ -10,17 +10,17 @@ import matplotlib.pyplot as plt
 
 
 # compressor design data
-beta_blade = np.array([])       # hub, mid, tip
-R_hub =
-R_tip =
-t_le =
-Nbl =
+beta_blade = np.array([-2, -2, -2])       # hub, mid, tip
+R_hub = 0.3
+R_tip = 0.6
+t_le = 0.001
+Nbl = 16
 
 # operating conditions
-Pt =
-Tt =
-mass_flow_vec = np.arange()     # range of mass flow to analyze
-rpm =
+Pt = 39513.14
+Tt = 250.13
+mass_flow_vec = np.arange(70, 90, 5)     # range of mass flow to analyze
+rpm = 5000
 
 # fluid information (perfect gas)
 gamma = 1.4

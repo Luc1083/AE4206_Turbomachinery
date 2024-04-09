@@ -1,0 +1,1 @@
+python -m pip install numpy matplotlib scipy pysimplegui==4.60.2
