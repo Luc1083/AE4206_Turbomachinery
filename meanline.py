@@ -230,8 +230,8 @@ class Fan:
             # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
 
             # For the sake of testing assume constant tc
-            self.t_c_rotor = np.ones(self.no_points) * 0.05
-            self.t_c_stator = np.ones(self.no_points) * 0.05
+            self.t_c_rotor = np.ones(self.no_points) * 0.15
+            self.t_c_stator = np.ones(self.no_points) * 0.15
 
             # Calculate flow incidence, deviation, blade angles for both rotor and stator
             # Create array with ideal flow deflection for rotor
@@ -534,16 +534,10 @@ class Fan:
         #mixing_loss=((2*chamber_angle)/spacing)+((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
         mixing_loss=((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
 
-        #tip losses
-        tip_loss=(2*Cd*0.01*chord_stator)/(spacing*np.cos(abs(alpha_2)))
-       
-       
-        print('tip_loss=',tip_loss)
-
 
         
 
-        return BL_loss, shock_loss, mixing_loss,tip_loss
+        return BL_loss, shock_loss, mixing_loss
         
 
         ...
@@ -564,7 +558,8 @@ class Fan:
 
         #tip loss
         tip_loss=(2*Cd*0.01*chord_rotor)/(spacing*np.cos(abs(beta_1)))
-        
+        print(tip_loss)
+       
 
         return BL_loss, shock_loss, mixing_loss
         ...
