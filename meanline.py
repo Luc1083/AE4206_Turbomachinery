@@ -284,7 +284,7 @@ class Fan:
             self.dn_tl=self.calc_tip_leakage_loss(self.h_blade_rotor,self.rotor_solidity_mean,abs(self.beta_1),self.theta,self.psi_mean,abs(self.beta_2),self.rho,
                                                       self.dyn_visc,self.w_1,self.c_mean_rotor,Mach_0)
             
-            self.rotor_loss=sum(self.calc_rotor_loss(0.002,self.beta_1,self.beta_2,Mach_1,self.gamma,self.R_air,self.T_inlet,camber_angle_mean_rotor,t_s_rotor,
+            self.rotor_loss=sum(self.calc_rotor_loss(0.002,abs(self.beta_1),abs(self.beta_2),Mach_1,self.gamma,self.R_air,self.T_inlet,camber_angle_mean_rotor,t_s_rotor,
                                                  -0.15,self.rho,self.w_1,self.c_mean_rotor,self.dyn_visc,spacing_rotor))
             self.stator_loss=sum(self.calc_stator_loss(0.002,self.alpha_2,0,Mach_2,self.gamma,self.R_air,self.T_exit_rotor,camber_angle_mean_stator,t_s_stator,
                                                  -0.15,self.rho,self.v_2,self.c_mean_stator,self.dyn_visc,spacing_stator))
@@ -490,8 +490,20 @@ class Fan:
                     1 / Cs_c_stator) * (theta ** 2 / psi)
         return [dn_rotor, dn_stator]
 
-    def calc_endwall_loss(self):
-        ...
+    def calc_endwall_loss(self,Cd,alpha_1,alpha_2,gamma,spacing,chord,rho,w1,dynamic_viscosity,solidity,mach):
+        c2=0.5*((np.tan(alpha_2)/np.cos(alpha_2))-(np.tan(alpha_1)/np.cos(alpha_1))+np.log((np.tan(alpha_2)+(1/np.cos(alpha_2)))/(np.tan(alpha_1)+(1/np.cos(alpha_1)))))
+        c1=(1/4)*((np.tan(alpha_2)/np.cos(alpha_2)**3)-(np.tan(alpha_1)/np.cos(alpha_1)**3)+3*c2)
+        Re=(rho*w1*chord)/dynamic_viscosity
+        Deq=(np.cos(alpha_2)/np.cos(alpha_1))*(1.12+0.61*((np.cos(alpha_1))**2/solidity)*(np.tan(alpha_2)-np.tan(alpha_1)))
+        momentum_thickness=(0.0045/(1-0.95*np.log(Deq)))
+        M=(momentum_thickness)*(solidity/(np.cos(alpha_2)))
+        displacement_thickness=0.046*(1+0.8*mach**2)**0.44*Re**(-0.2)
+        D=(displacement_thickness)*(solidity/(np.cos(alpha_2)))
+        alpha_m=np.arctan(np.tan(abs(alpha_2))*((1-D-M))/(1-D)**2)
+        staggerangle=np.arctan(np.tan(alpha_m)-0.213)
+        endwall_loss=(4*Cd**2*alpha_2*np.cos(staggerangle))/(alpha_2-np.tan(alpha_1))*(chord/spacing)*(4/3)*c1
+        return endwall_loss
+        
 
     def calc_tip_leakage_loss(self,h_blade_rotor,solidity_rotor,beta_1,theta,psi,beta_2,
                          rho,dynamic_viscosity,w1,chord_rotor,mach_rotor):
@@ -534,10 +546,15 @@ class Fan:
         #mixing_loss=((2*chamber_angle)/spacing)+((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
         mixing_loss=((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
 
+        endwall_loss=self.calc_endwall_loss(Cd,alpha_2,alpha_3,gamma,spacing,chord_stator,rho,v2,dynamic_viscosity,chord_stator/spacing,mach_1)
 
         
 
-        return BL_loss, shock_loss, mixing_loss
+
+
+        
+
+        return BL_loss, shock_loss, mixing_loss,endwall_loss
         
 
         ...
@@ -558,10 +575,12 @@ class Fan:
 
         #tip loss
         tip_loss=(2*Cd*0.01*chord_rotor)/(spacing*np.cos(abs(beta_1)))
+
+        #endwall_loss
+        endwall_loss=self.calc_endwall_loss(Cd,beta_1,beta_2,gamma,spacing,chord_rotor,rho,w1,dynamic_viscosity,chord_rotor/spacing,mach_1)
        
 
-        return BL_loss, shock_loss, mixing_loss
-        ...
+        return BL_loss, shock_loss, mixing_loss,tip_loss,endwall_loss
 
     def calc_stall_margin(self, mach_rel_out, mach_rel_in,t_th, beta, beta_blade):
         # This function uses control volume method based off of C.Freeman's paper
