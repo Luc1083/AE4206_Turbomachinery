@@ -558,7 +558,6 @@ class Fan:
 
         #tip loss
         tip_loss=(2*Cd*0.01*chord_rotor)/(spacing*np.cos(abs(beta_1)))
-        print(tip_loss)
        
 
         return BL_loss, shock_loss, mixing_loss
