@@ -22,7 +22,6 @@ class optimize_design(Problem):
                          xu=np.array([0, 0, 0]))
 
     def _evaluate(self, x, out, *args, **kwargs):
-
         design = Fan(x)
 
         # Objective functions
@@ -139,7 +138,6 @@ class Fan:
             self.w_1 = self.v_axial / np.cos(self.beta_1)
             self.v_2 = self.v_axial / np.cos(self.alpha_2)
             self.w_2 = self.v_axial / np.cos(self.beta_2)
-
 
             # Calculate intermediate static properties after rotor
             [self.T_exit_rotor, self.M_exit_rotor, self.P_exit_rotor, self.rho_exit_rotor] = (
@@ -503,7 +501,6 @@ class Fan:
         staggerangle=np.arctan(np.tan(alpha_m)-0.213)
         endwall_loss=(4*Cd**2*alpha_2*np.cos(staggerangle))/(alpha_2-np.tan(alpha_1))*(chord/spacing)*(4/3)*c1
         return endwall_loss
-        
 
     def calc_tip_leakage_loss(self,h_blade_rotor,solidity_rotor,beta_1,theta,psi,beta_2,
                          rho,dynamic_viscosity,w1,chord_rotor,mach_rotor):
@@ -521,8 +518,6 @@ class Fan:
         dn=Cd*(0.01)*Cs_c_rotor*(2*theta*np.sqrt(psi)*(psi*np.cos(staggerangle_rotor)+2*theta*solidity_rotor))/(
             2*theta*solidity_rotor*np.cos(staggerangle_rotor))**(3/2)
         return dn
-        
-
 
     def calc_eta_tt(self,stator_loss,rotor_loss,psi,U,w_1,v_2):
         eta_tt=1-(1/(2*psi))*((stator_loss*v_2**2)+(rotor_loss*w_1**2))/U**2
@@ -590,7 +585,6 @@ class Fan:
           (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
         residual = lhs - rhs
         return residual
-
 
 
 class Fan_Plots:
@@ -790,29 +784,68 @@ class Fan_Plots:
               f"M={self.Fan.M_exit_stator}")
 
 
+def fix_extrapolation_spline(betas: (np.ndarray, list), solidity: np.ndarray, interpolator, n: int = 20) \
+        -> intrp.RectBivariateSpline:
+    """
+    Takes beta and solidty values, and arbitrary 2d interpolator, and remaps it to a spline based interpolator.
+    :param betas: beta values to use
+    :param solidity: solidity values to use
+    :param interpolator: interpolator to remap
+    :param n: int, optional, number of points to use in beta. 20 seems to be a reasonable balance between smoothing
+              and accuracy. Checked by eye tbh, but it looks gucci enough for me.
+    :return: rectilinear bivariate spline interpolator based on the provided values and interpolator.
+    """
+    # betas is a nested array, with row i corresponding to solidity i
+    # make nice grid
+    beta_min = -1e9
+    beta_max = 1e9
+    # find beta values that are guaranteed to be within the original range
+    for beta in betas:
+        beta_max = min(max(beta), beta_max)
+        beta_min = max(min(beta), beta_min)
+    betas = np.linspace(beta_min, beta_max, n)
+    betas_xx, solidity_yy = np.meshgrid(betas, solidity, indexing="ij")
+    inputs = interpolator(betas_xx, solidity_yy)
+    return intrp.RectBivariateSpline(betas, solidity, inputs)
+
+
 class Lieblein_Model:
     def __init__(self):
         # Interpolate i_0 - beta_1 graph
-        points, values = self.get_data_for_2Dinterpolation([("i0_solidity-0_4.csv", 0.4), ("i0_solidity-0_6.csv", 0.6),
-                                                            ("i0_solidity-0_8.csv", 0.8), ("i0_solidity-1.csv", 1),
-                                                            ("i0_solidity-1_2.csv", 1.2), ("i0_solidity-1_4.csv", 1.4),
-                                                            ("i0_solidity-1_6.csv", 1.6), ("i0_solidity-1_8.csv", 1.8),
-                                                            ("i0_solidity-2.csv", 2.0)], graph="i0")
-        self.calc_i0 = intrp.LinearNDInterpolator(points=points, values=values)
+        points, values, betas, solidity = self.get_data_for_2Dinterpolation([("i0_solidity-0_4.csv", 0.4),
+                                                                             ("i0_solidity-0_6.csv", 0.6),
+                                                                             ("i0_solidity-0_8.csv", 0.8),
+                                                                             ("i0_solidity-1.csv", 1),
+                                                                             ("i0_solidity-1_2.csv", 1.2),
+                                                                             ("i0_solidity-1_4.csv", 1.4),
+                                                                             ("i0_solidity-1_6.csv", 1.6),
+                                                                             ("i0_solidity-1_8.csv", 1.8),
+                                                                             ("i0_solidity-2.csv", 2.0)], graph="i0")
+        self.calc_i0 = fix_extrapolation_spline(betas, solidity,
+                                                intrp.LinearNDInterpolator(points=points, values=values), n=20)
+        # tweak 'n' to balance smoothing with a closer fit, it determines the number of points in beta.
+
+        # self._test_spline_interp(betas, points, solidity, values)
+
         # Interpolate n
-        points, values = self.get_data_for_2Dinterpolation([("n_solidity-0_4.csv", 0.4), ("n_solidity-0_6.csv", 0.6),
-                                                            ("n_solidity-0_8.csv", 0.8), ("n_solidity-1.csv", 1),
-                                                            ("n_solidity-1_2.csv", 1.2), ("n_solidity-1_4.csv", 1.4),
-                                                            ("n_solidity-1_6.csv", 1.6), ("n_solidity-1_8.csv", 1.8),
-                                                            ("n_solidity-2.csv", 2)], graph="n")
-        self.calc_n = intrp.LinearNDInterpolator(points=points, values=values)
+        points, values, betas, solidity = self.get_data_for_2Dinterpolation([("n_solidity-0_4.csv", 0.4),
+                                                                             ("n_solidity-0_6.csv", 0.6),
+                                                                             ("n_solidity-0_8.csv", 0.8),
+                                                                             ("n_solidity-1.csv", 1),
+                                                                             ("n_solidity-1_2.csv", 1.2),
+                                                                             ("n_solidity-1_4.csv", 1.4),
+                                                                             ("n_solidity-1_6.csv", 1.6),
+                                                                             ("n_solidity-1_8.csv", 1.8),
+                                                                             ("n_solidity-2.csv", 2)], graph="n")
+        self.calc_n = fix_extrapolation_spline(betas, solidity, intrp.LinearNDInterpolator(points, values))
+
         # Interpolate Ki_t
         tc_array = np.genfromtxt(fname="lieblein_graphs/Ki_tc.csv", usecols=[0], delimiter=",", dtype=np.float32)
         Ki_t_array = np.genfromtxt(fname="lieblein_graphs/Ki_tc.csv", usecols=[1], delimiter=",", dtype=np.float32)
         self.calc_Ki_t = intrp.interp1d(x=tc_array, y=Ki_t_array, fill_value='extrapolate', kind="linear")
 
         # Interpolate delta
-        points, values = self.get_data_for_2Dinterpolation([("sigma0_solidity-0_4.csv", 0.4),
+        points, values, betas, solidity = self.get_data_for_2Dinterpolation([("sigma0_solidity-0_4.csv", 0.4),
                                                             ("sigma0_solidity-0_8.csv", 0.8),
                                                             ("sigma0_solidity-1.csv", 1),
                                                             ("sigma0_solidity-1.2.csv", 1.2),
@@ -820,7 +853,9 @@ class Lieblein_Model:
                                                             ("sigma0_solidity-1_6.csv", 1.6),
                                                             ("sigma0_solidity-1_8.csv", 1.8),
                                                             ("sigma0_solidity-2.csv", 2)], graph="delta")
-        self.calc_delta0 = intrp.LinearNDInterpolator(points=points, values=values)
+        self.calc_delta0 = fix_extrapolation_spline(betas, solidity,
+                                                    intrp.LinearNDInterpolator(points=points, values=values))
+
         # Interpolate K_delta
         tc_array = np.genfromtxt(fname="lieblein_graphs/Ksigma_tc.csv", usecols=[0], delimiter=",", dtype=np.float32)
         K_delta_array = np.genfromtxt(fname="lieblein_graphs/Ksigma_tc.csv", usecols=[1], delimiter=",",
@@ -842,11 +877,23 @@ class Lieblein_Model:
         b_array = np.genfromtxt(fname="lieblein_graphs/b_beta.csv", usecols=[1], delimiter=",", dtype=np.float32)
         self.calc_b = intrp.interp1d(x=beta1_array, y=b_array, fill_value='extrapolate', kind="linear")
 
-    def get_data_for_2Dinterpolation(self, list, graph):
+    def _test_spline_interp(self, betas, points, solidity, values):
+        spline = fix_extrapolation_spline(betas, solidity, self.calc_i0, 20)
+        beta = points[:, 0]
+        beta = np.linspace(min(beta) * 0.9, max(beta) * 1.1, 1000)
+        for i, sol in enumerate(solidity):
+            # plt.plot(beta, interp2d(beta, sol), label="interp2d")
+            plt.plot(beta, spline(beta, sol), label="Spline")
+            plt.plot(beta, self.calc_i0(beta, sol), label="NDInterp")
+            plt.scatter(points[:, 0], values)
+            plt.legend()
+            plt.show()
+
+    def get_data_for_2Dinterpolation(self, file_solidity_list, graph):
         beta_array = np.array([])
         solidity_array = np.array([])
         i0_array = np.array([])
-        for [file, solidity] in list:
+        for [file, solidity] in file_solidity_list:
             file = "lieblein_graphs/" + file
             # Load data from files
             beta_dummy = np.genfromtxt(fname=file, usecols=[0], delimiter=",", dtype=np.float32)
@@ -863,7 +910,12 @@ class Lieblein_Model:
             i0_array = np.append(i0_array, i0_values)
             solidity_array = np.append(solidity_array, solidity_dummy)
         points = np.transpose([beta_array, solidity_array])
-        return points, i0_array
+        solidity = np.unique(solidity_array)
+        # there's a different number of betas per solidity, so we have to do some shenanigans.
+        idx = np.where(solidity_array != np.roll(solidity_array, -1))[0] + 1  # +1 compensates for offset from np.roll
+        idx = np.append(idx, 0)
+        betas = [beta_array[idx[i - 1]:idx[i]] for i in range(idx.size - 1)]
+        return points, i0_array, betas, solidity
 
     def get_deviation_angle(self, beta_1, delta_beta, solidity, t_c, profile):
         # First calculate i_0
@@ -876,14 +928,14 @@ class Lieblein_Model:
             Kdelta_sh = 0.75
             m = self.calc_m_dca(beta_1)
         Ki_t = self.calc_Ki_t(t_c)
-        i0_10 = self.calc_i0(beta_1, solidity)
+        i0_10 = self.calc_i0(beta_1, solidity, grid=False)
         i_0 = Ki_sh * i0_10 * Ki_t
         # Then calculate delta_0
         Kdelta_t = self.calc_K_delta(t_c)
-        delta0_10 = self.calc_delta0(beta_1, solidity)
+        delta0_10 = self.calc_delta0(beta_1, solidity, grid=False)
         delta_0 = Kdelta_sh * Kdelta_t * delta0_10
         # Calculate theta
-        n = self.calc_n(beta_1, solidity)
+        n = self.calc_n(beta_1, solidity, grid=False)
         b = self.calc_b(beta_1)
         theta = (delta_beta + delta_0 - i_0) / (1 + n - m / (solidity ** b))  # camber line angle, not flow coefficient
         # Calculate optimal incidence and flow angle
