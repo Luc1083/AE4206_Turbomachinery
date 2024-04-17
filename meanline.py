@@ -254,7 +254,6 @@ class Fan:
             self.stator_blade_beta2 = self.alpha_2_stator_distribution + self.delta_stator * np.pi / 180
 
             # Calculate losses
-            #warnings.warn("check the mean values here, I don't think that's correct")
             DF_rotor=1-np.cos(abs(self.beta_1))/np.cos(abs(self.beta_2))+(np.cos(abs(self.beta_1))/2*self.rotor_solidity_mean)*(np.tan(abs(self.beta_1))-np.tan(abs(self.beta_2)))
             DF_stator=1-np.cos(abs(self.alpha_2))/np.cos(abs(0))+(np.cos(abs(self.alpha_2))/2*self.stator_solidity_mean)*(np.tan(abs(self.alpha_2))-np.tan(abs(0)))
             Mach_0 = self.w_1 / np.sqrt(self.gamma * self.R_air * self.T_inlet)
@@ -543,16 +542,8 @@ class Fan:
 
         endwall_loss=self.calc_endwall_loss(Cd,alpha_2,alpha_3,gamma,spacing,chord_stator,rho,v2,dynamic_viscosity,chord_stator/spacing,mach_1)
 
-        
-
-
-
-        
-
         return BL_loss, shock_loss, mixing_loss,endwall_loss
-        
 
-        ...
 
     def calc_rotor_loss(self,Cd,beta_1,beta_2,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,w1,chord_rotor,dynamic_viscosity,spacing):
         BL_loss=Cd*(2*np.sqrt(3)+6/np.sqrt(3))*abs(np.tan(beta_2)-np.tan(beta_1))
