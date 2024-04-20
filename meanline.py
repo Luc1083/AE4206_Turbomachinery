@@ -775,7 +775,7 @@ class Fan_Plots:
               f"M={self.Fan.M_exit_stator}")
 
 
-def fix_extrapolation_spline(betas: (np.ndarray, list), solidity: np.ndarray, interpolator, n: int = 20) \
+def fix_extrapolation_spline(betas: (np.ndarray, list), solidity: np.ndarray, interpolator, n: int = 8) \
         -> intrp.RectBivariateSpline:
     """
     Takes beta and solidty values, and arbitrary 2d interpolator, and remaps it to a spline based interpolator.
@@ -800,6 +800,18 @@ def fix_extrapolation_spline(betas: (np.ndarray, list), solidity: np.ndarray, in
     return intrp.RectBivariateSpline(betas, solidity, inputs)
 
 
+def compare_interps(interp_ref, interp_new, points, title: str):
+    x = points[:, 0]
+    y = points[:, 1]
+    ref_vals = interp_ref(x, y)
+    new_vals = interp_new(x, y, grid=False)
+    rel_diff = (new_vals - ref_vals)/ref_vals
+    plt.scatter(x, rel_diff)
+    plt.grid()
+    plt.title(title)
+    plt.show()
+
+
 class Lieblein_Model:
     def __init__(self):
         # Interpolate i_0 - beta_1 graph
@@ -813,7 +825,9 @@ class Lieblein_Model:
                                                                              ("i0_solidity-1_8.csv", 1.8),
                                                                              ("i0_solidity-2.csv", 2.0)], graph="i0")
         self.calc_i0 = fix_extrapolation_spline(betas, solidity,
-                                                intrp.LinearNDInterpolator(points=points, values=values), n=20)
+                                                intrp.LinearNDInterpolator(points=points, values=values))
+        # compare_interps(intrp.LinearNDInterpolator(points=points, values=values), self.calc_i0, points, "i0")
+
         # tweak 'n' to balance smoothing with a closer fit, it determines the number of points in beta.
 
         # self._test_spline_interp(betas, points, solidity, values)
@@ -829,6 +843,7 @@ class Lieblein_Model:
                                                                              ("n_solidity-1_8.csv", 1.8),
                                                                              ("n_solidity-2.csv", 2)], graph="n")
         self.calc_n = fix_extrapolation_spline(betas, solidity, intrp.LinearNDInterpolator(points, values))
+        # compare_interps(intrp.LinearNDInterpolator(points=points, values=values), self.calc_n, points, "n")
 
         # Interpolate Ki_t
         tc_array = np.genfromtxt(fname="lieblein_graphs/Ki_tc.csv", usecols=[0], delimiter=",", dtype=np.float32)
@@ -846,6 +861,7 @@ class Lieblein_Model:
                                                             ("sigma0_solidity-2.csv", 2)], graph="delta")
         self.calc_delta0 = fix_extrapolation_spline(betas, solidity,
                                                     intrp.LinearNDInterpolator(points=points, values=values))
+        # compare_interps(intrp.LinearNDInterpolator(points=points, values=values), self.calc_delta0, points, "delta0")
 
         # Interpolate K_delta
         tc_array = np.genfromtxt(fname="lieblein_graphs/Ksigma_tc.csv", usecols=[0], delimiter=",", dtype=np.float32)
