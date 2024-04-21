@@ -5,7 +5,7 @@ import scipy.interpolate as intrp
 from pymoo.core.problem import Problem
 
 
-# Constraints:
+# Constraints:s
 
 # Optimisation Structure:
 #   1. Problem
@@ -62,10 +62,10 @@ class multi_criteria_decision_making:
 
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
-                 beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,
-                 eta_tt_estimated, row_chord_spacing_ratio, lieblein_model, profile, methodology):
-        # Assign properties
+                 beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,eta_tt_estimated,
+                 row_chord_spacing_ratio, lieblein_model, profile, methodology):
 
+        # Assign properties
         self.Mach_inlet = Mach_inlet
         self.AR_rotor = AR_rotor
         self.AR_stator = AR_stator
@@ -288,8 +288,11 @@ class Fan:
             self.rotor_loss=sum(self.calc_rotor_loss(0.002,abs(self.beta_1),abs(self.beta_2),Mach_1,self.gamma,self.R_air,self.T_inlet,camber_angle_mean_rotor,t_s_rotor,
                                                  -0.15,self.rho_exit_rotor,self.w_1,self.c_mean_rotor, spacing_rotor))
             self.stator_loss=sum(self.calc_stator_loss(0.002,self.alpha_2,0,Mach_2,self.gamma,self.R_air,self.T_exit_rotor,camber_angle_mean_stator,t_s_stator,
-                                                 -0.15,self.rho,self.v_2,self.c_mean_stator,self.dyn_visc,spacing_stator))
+                                                 -0.15,self.rho_exit_stator,self.v_2,self.c_mean_stator, spacing_stator))
 
+            #print('BL_loss =', self.dn_bl)
+            #print('Mixing loss =', self.dn_ml)
+            #print('Tip leakage loss =',self.dn_tl)
             # Update eta
             new_eta_tt=self.calc_eta_tt(self.stator_loss,self.rotor_loss,self.psi_mean,self.U_mean,self.w_1,self.v_2)
             difference = np.abs(new_eta_tt - self.eta_tt_estimated)
