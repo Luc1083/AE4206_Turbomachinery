@@ -56,13 +56,11 @@ class multi_criteria_decision_making:
 
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
-                 beta_tt, P0_cruise, rho, dyn_visc, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,
+                 beta_tt, P0_cruise,T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,
                  eta_tt_estimated, Cp_air,
                  Cv_air, row_chord_spacing_ratio, lieblein_model, profile, methodology):
         # Assign properties
-        self.dyn_visc = dyn_visc
-        self.rho = rho
-        warnings.warn("We should remove the density here and calculate it on the fly")
+
         self.Mach_inlet = Mach_inlet
         self.AR_rotor = AR_rotor
         self.AR_stator = AR_stator
@@ -272,23 +270,23 @@ class Fan:
                 self.calc_BL_loss(DF_rotor, DF_stator,
                                   self.stator_solidity_mean, self.rotor_solidity_mean, abs(self.beta_1),
                                   abs(self.alpha_2), self.theta, self.psi_mean, abs(self.beta_2), 0))
-            self.dn_ml = sum(
-                self.calc_mixing_loss(DF_rotor, DF_stator,
-                                      self.stator_solidity_mean, self.rotor_solidity_mean, abs(self.beta_1),
-                                  abs(self.alpha_2), self.theta, self.psi_mean, abs(self.beta_2), 0,
-                                      self.rho, self.dyn_visc, self.w_1, self.w_2, self.c_mean_stator,
-                                      self.c_mean_rotor, Mach_0, Mach_1))
-            self.dn_tl=self.calc_tip_leakage_loss(self.h_blade_rotor,self.rotor_solidity_mean,abs(self.beta_1),self.theta,self.psi_mean,abs(self.beta_2),self.rho,
-                                                      self.dyn_visc,self.w_1,self.c_mean_rotor,Mach_0)
+            # self.dn_ml = sum(
+            #     self.calc_mixing_loss(DF_rotor, DF_stator,
+            #                           self.stator_solidity_mean, self.rotor_solidity_mean, abs(self.beta_1),
+            #                       abs(self.alpha_2), self.theta, self.psi_mean, abs(self.beta_2), 0,
+            #                           self.rho_exit_rotor, self.dyn_visc, self.w_1, self.w_2, self.c_mean_stator,
+            #                           self.c_mean_rotor, Mach_0, Mach_1))
+            # self.dn_tl=self.calc_tip_leakage_loss(self.h_blade_rotor,self.rotor_solidity_mean,abs(self.beta_1),self.theta,self.psi_mean,abs(self.beta_2),self.rho_exit_rotor,
+            #                                           self.dyn_visc,self.w_1,self.c_mean_rotor,Mach_0)
             
             self.rotor_loss=sum(self.calc_rotor_loss(0.002,abs(self.beta_1),abs(self.beta_2),Mach_1,self.gamma,self.R_air,self.T_inlet,camber_angle_mean_rotor,t_s_rotor,
-                                                 -0.15,self.rho,self.w_1,self.c_mean_rotor,self.dyn_visc,spacing_rotor))
+                                                 -0.15,self.rho_exit_rotor,self.w_1,self.c_mean_rotor, spacing_rotor))
             self.stator_loss=sum(self.calc_stator_loss(0.002,self.alpha_2,0,Mach_2,self.gamma,self.R_air,self.T_exit_rotor,camber_angle_mean_stator,t_s_stator,
-                                                 -0.15,self.rho,self.v_2,self.c_mean_stator,self.dyn_visc,spacing_stator))
+                                                 -0.15,self.rho_exit_stator,self.v_2,self.c_mean_stator, spacing_stator))
             
             #print('BL_loss =', self.dn_bl)
             #print('Mixing loss =', self.dn_ml)
-            print('Tip leakage loss =',self.dn_tl)
+            #print('Tip leakage loss =',self.dn_tl)
             # Update eta
             dummy_eta_tt=self.calc_eta_tt(self.stator_loss,self.rotor_loss,self.psi_mean,self.U_mean,self.w_1,self.v_2)
             print('Total-total eff =',dummy_eta_tt)
@@ -525,7 +523,8 @@ class Fan:
 
 
     #diff loss method:
-    def calc_stator_loss(self,Cd,alpha_2,alpha_3,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,v2,chord_stator,dynamic_viscosity,spacing):
+    def calc_stator_loss(self,Cd,alpha_2,alpha_3,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,v2,chord_stator,spacing):
+        dynamic_viscosity=self.calc_dyn_visc(T_1)
         BL_loss=Cd*(2*np.sqrt(3)+6/np.sqrt(3))*abs(np.tan(alpha_3)-np.tan(alpha_2))
 
         if mach_1 > 1:
@@ -545,7 +544,8 @@ class Fan:
         return BL_loss, shock_loss, mixing_loss,endwall_loss
 
 
-    def calc_rotor_loss(self,Cd,beta_1,beta_2,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,w1,chord_rotor,dynamic_viscosity,spacing):
+    def calc_rotor_loss(self,Cd,beta_1,beta_2,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,w1,chord_rotor,spacing):
+        dynamic_viscosity=self.calc_dyn_visc(T_1)
         BL_loss=Cd*(2*np.sqrt(3)+6/np.sqrt(3))*abs(np.tan(beta_2)-np.tan(beta_1))
         if mach_1 > 1:
             shock_loss=(4/(3*mach_1**2*(gamma+1)**2))*(mach_1**2-1)**3
@@ -561,10 +561,10 @@ class Fan:
 
         #tip loss
         tip_loss=(2*Cd*0.01*chord_rotor)/(spacing*np.cos(abs(beta_1)))
-
+    
         #endwall_loss
         endwall_loss=self.calc_endwall_loss(Cd,beta_1,beta_2,gamma,spacing,chord_rotor,rho,w1,dynamic_viscosity,chord_rotor/spacing,mach_1)
-       
+        
 
         return BL_loss, shock_loss, mixing_loss,tip_loss,endwall_loss
 
@@ -576,6 +576,13 @@ class Fan:
           (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
         residual = lhs - rhs
         return residual
+    
+    def calc_dyn_visc(self,T):
+        mu_0=1.716E-5
+        T_0=273
+        S_mu=111
+        mu=mu_0*((T/T_0)**(3/2))*((T_0+S_mu)/(T+S_mu))
+        return mu
 
 
 class Fan_Plots:
