@@ -13,29 +13,35 @@ from pymoo.core.problem import Problem
 #   3. Stop Criteria
 
 class optimize_design(Problem):
-
     def __init__(self):
-        super().__init__(n_var=0,
-                         n_obj=0,
+        super().__init__(n_var=8,
+                         n_obj=3,
                          n_ieq_constr=0,
-                         xl=np.array([0, 0, 0]),
-                         xu=np.array([0, 0, 0]))
+                         xl=np.array([1, 1, 0.5, 0.5, 0.5, 10, 25, 0]),
+                         xu=np.array([5, 5, 1.5, 1.5, 2.0, 40, 100, 0.7]))
 
     def _evaluate(self, x, out, *args, **kwargs):
-        design = Fan(x)
+        # input_vector = [AR_rotor, AR_stator, taper_rotor, taper_stator, n, N_R, N_S, hub_tip_ratio]
+        # create design using Fan class and input vector
+        # Fan(omega,ratio,..., x1, x2, ..., x3,.., x4)
+
+        design = Fan(Mach_inlet=0.6, AR_rotor=x[0], AR_stator=x[1], taper_rotor=x[2], taper_stator=x[3], n=x[4], no_blades_rotor=x[5],
+             no_blades_stator=x[6], beta_tt=1.6, P0_cruise=39513.14, rho=0.59, dyn_visc=15.6E-6, T0_cruise=250.13, mdot=80, omega=5000,
+             hub_tip_ratio=x[7], gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model,
+             profile="NACA-65", methodology="free vortex")
 
         # Objective functions
         obj1 = design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated)
-        obj2 = np.pi() * design.r_tip ** 2  # Minimise frontal area (pi() * r_tip ** 2)
-        obj3 = design.weight  # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
+        obj2 = np.pi * design.r_tip ** 2  # Minimise frontal area (pi() * r_tip ** 2)
+        obj3 = design.volume  # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
-        const2 = np.abs(design.CV_residual_stator) - 1e-6
+        # const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
+        # const2 = np.abs(design.CV_residual_stator) - 1e-6
 
         # Stacking Objectives to "F" and Constraints to "G"
         out["F"] = np.column_stack([obj1, obj2, obj3])
-        out["G"] = np.column_stack([const1, const2])
+        # out["G"] = np.column_stack([const1, const2])
 
 
 class optimize_plots:
@@ -56,9 +62,8 @@ class multi_criteria_decision_making:
 
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
-                 beta_tt, P0_cruise,T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,
-                 eta_tt_estimated, Cp_air,
-                 Cv_air, row_chord_spacing_ratio, lieblein_model, profile, methodology):
+                 beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,
+                 eta_tt_estimated, row_chord_spacing_ratio, lieblein_model, profile, methodology):
         # Assign properties
 
         self.Mach_inlet = Mach_inlet
@@ -81,14 +86,15 @@ class Fan:
         self.max_iter = 1000
         self.profile = profile
         self.methodology = methodology
+        self.eta_tt_estimated = eta_tt_estimated
 
         # Calculate inlet properties
+        self.R_air = R_air
         self.gamma = gamma
-        self.Cp = Cp_air
-        self.Cv = Cv_air
+        self.Cp = self.R_air * self.gamma / (self.gamma - 1)
+        self.Cv = self.Cp / self.gamma
         self.P_inlet = self.P0_inlet * (1 + (Mach_inlet ** 2) * ((gamma - 1) / 2)) ** (-gamma / (gamma - 1))
         self.T_inlet = self.T0_inlet * (1 + (Mach_inlet ** 2) * ((gamma - 1) / 2)) ** (-1)
-        self.R_air = R_air
         self.rho_inlet = self.P_inlet / (self.R_air * self.T_inlet)
         self.Mach_inlet = Mach_inlet
         self.v_axial = Mach_inlet * np.sqrt(gamma * R_air * self.T_inlet)
@@ -125,7 +131,7 @@ class Fan:
             # Calculate intermediate total properties
             self.P0_exit_rotor = self.betta_tt * self.P0_inlet
             self.T0s_exit_rotor = self.T0_inlet * self.betta_tt ** ((self.gamma - 1) / self.gamma)
-            self.T0_exit_rotor = (self.T0s_exit_rotor - self.T0_inlet) / eta_tt_estimated + self.T0_inlet
+            self.T0_exit_rotor = (self.T0s_exit_rotor - self.T0_inlet) / self.eta_tt_estimated + self.T0_inlet
             self.psi_mean = (self.T0s_exit_rotor - self.T0_inlet) * self.Cp / (self.U_mean ** 2)
 
             # Calculate angles, velocities at the meanline
@@ -282,18 +288,17 @@ class Fan:
             self.rotor_loss=sum(self.calc_rotor_loss(0.002,abs(self.beta_1),abs(self.beta_2),Mach_1,self.gamma,self.R_air,self.T_inlet,camber_angle_mean_rotor,t_s_rotor,
                                                  -0.15,self.rho_exit_rotor,self.w_1,self.c_mean_rotor, spacing_rotor))
             self.stator_loss=sum(self.calc_stator_loss(0.002,self.alpha_2,0,Mach_2,self.gamma,self.R_air,self.T_exit_rotor,camber_angle_mean_stator,t_s_stator,
-                                                 -0.15,self.rho_exit_stator,self.v_2,self.c_mean_stator, spacing_stator))
-            
-            #print('BL_loss =', self.dn_bl)
-            #print('Mixing loss =', self.dn_ml)
-            #print('Tip leakage loss =',self.dn_tl)
+                                                 -0.15,self.rho,self.v_2,self.c_mean_stator,self.dyn_visc,spacing_stator))
+
             # Update eta
-            dummy_eta_tt=self.calc_eta_tt(self.stator_loss,self.rotor_loss,self.psi_mean,self.U_mean,self.w_1,self.v_2)
-            print('Total-total eff =',dummy_eta_tt)
-            new_eta_tt = 0.9
-            difference = np.abs(new_eta_tt - eta_tt_estimated)
-            eta_tt_estimated = new_eta_tt
+            new_eta_tt=self.calc_eta_tt(self.stator_loss,self.rotor_loss,self.psi_mean,self.U_mean,self.w_1,self.v_2)
+            difference = np.abs(new_eta_tt - self.eta_tt_estimated)
+            self.eta_tt_estimated = new_eta_tt
+            print(self.eta_tt_estimated)
             n_iter += 1
+
+        # Calculate weight and volume of stage
+        self.volume = self.weight()
 
     def plot_meanline_vs_exit_props_differences(self):
         """
@@ -434,6 +439,10 @@ class Fan:
         Mach = v_inlet / np.sqrt(self.R_air * self.gamma * self.T_exit_rotor)
         return [alpha_2, v_inlet, alpha_1, solidity, DF, Mach]
 
+
+    def stator_force(self):
+        Fm = self.solidity_stator_distribution * (self.P_exit_rotor - self.P_exit_rotor)
+        Ft = self.rho * self. * self.solidity_stator_distribution * (Vt1 - Vt2)
     def size_stator_thicknes(self):
         ...
         return ...  # t_c along blade radius, blade mass along the
@@ -561,10 +570,10 @@ class Fan:
 
         #tip loss
         tip_loss=(2*Cd*0.01*chord_rotor)/(spacing*np.cos(abs(beta_1)))
-    
+
         #endwall_loss
         endwall_loss=self.calc_endwall_loss(Cd,beta_1,beta_2,gamma,spacing,chord_rotor,rho,w1,dynamic_viscosity,chord_rotor/spacing,mach_1)
-        
+
 
         return BL_loss, shock_loss, mixing_loss,tip_loss,endwall_loss
 
@@ -576,13 +585,18 @@ class Fan:
           (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
         residual = lhs - rhs
         return residual
-    
+
     def calc_dyn_visc(self,T):
         mu_0=1.716E-5
         T_0=273
         S_mu=111
         mu=mu_0*((T/T_0)**(3/2))*((T_0+S_mu)/(T+S_mu))
         return mu
+
+    def weight(self):
+        volume = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * self.no_blades_rotor + \
+        0.5 * (self.c_hub_stator + self.c_tip_stator) * (self.h_blade_inlet_stator + self.h_blade_outlet_stator) / 2 * self.no_blades_stator
+        return volume
 
 
 class Fan_Plots:
