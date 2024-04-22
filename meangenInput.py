@@ -43,7 +43,7 @@ class MeangenCompressorInput:
         self.exec_extension = exec_extension
 
     def generate_input_file(self):
-        with open("./meangen.in", "w") as self.temp:
+        with open(f"{os.getcwd()}/meangen.in", "w") as self.temp:
             self.temp.write("C\n")  # compressor
             self.temp.write("AXI\n")  # axial
             self.temp.write(f"{self.fan.R_air :.3f}     {self.fan.gamma :.3f}\n")  # sets R and Gamma
@@ -169,7 +169,7 @@ class MeangenCompressorInput:
         print("Meangen input file written")
 
     def run_meangen(self):
-        p = subprocess.Popen(f"./execs/meangen-17.4{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(f"{os.getcwd()}/execs/meangen-17.4{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
         p.stdin.write(bytes("F", "utf-8"))
         p.stdin.flush()
         p.stdin.close()
@@ -218,7 +218,7 @@ class RunCFD:
 
     def run_stagen(self):
         # figure out what the fuck
-        p = subprocess.Popen(f"./execs/stagen-18.1{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(f"{os.getcwd()}/execs/stagen-18.1{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
         p.stdin.write(bytes("Y", "utf-8"))
         p.stdin.flush()
         p.stdin.close()
@@ -230,9 +230,9 @@ class RunCFD:
 
     def run_multall(self):
         if not os.path.isfile("intype"):
-            with open("./intype", "w") as f:
+            with open(f"{os.getcwd()}/intype", "w") as f:
                 f.write("N")
-        p = subprocess.run([f"./execs/multall-open-20.9{self.exec_extension}", "<stagen_new.dat", ">results.out"])
+        p = subprocess.run([f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension}", "<stagen_new.dat", ">results.out"])
 
     def post_process(self):
         # move some junk as well
