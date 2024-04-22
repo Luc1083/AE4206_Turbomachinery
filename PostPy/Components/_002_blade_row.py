@@ -1,5 +1,5 @@
 import numpy as np
-from Components._003_multiblock_solution import BlockCFD
+from ._003_multiblock_solution import BlockCFD
 from copy import deepcopy
 
 

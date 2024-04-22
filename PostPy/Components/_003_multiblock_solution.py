@@ -1,8 +1,8 @@
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from Components._004_grid import Coordinates
-from Components._005_flow_field import FlowField
+from ._004_grid import Coordinates
+from ._005_flow_field import FlowField
 
 
 class BlockCFD:
@@ -151,7 +151,7 @@ class BlockCFD:
             plt.contourf(x, rth, var)
         else:
             plt.contourf(x, rth, var,levels)
-        plt.show()
+        # plt.show()
 
     def get_pitch_average(self, variable: str, j: float, avr_type='massFlowAve') -> np.ndarray:
         """ Method to compute the pith-wise average of the fluid property 'variable' in an axial grid station J=j·N_j. It
