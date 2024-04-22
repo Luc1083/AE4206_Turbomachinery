@@ -6,8 +6,6 @@ import subprocess
 import meanline as ml
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 
 def angle_between_vectors(v1, v2=np.array([1, 0])):
     return np.arccos(v1.dot(v2) / np.linalg.norm(v1) / np.linalg.norm(v2))
@@ -71,7 +69,6 @@ class MeangenCompressorInput:
             # set our own row/stage gaps or use defaults
             # NOTE: I don't know if we compute this as of right now
             if self.force_axial_gaps:
-                #raise NotImplementedError("couldn't find it lol")
                 temp.write(f"{self.fan.spacing_rows :.5} 0.5\n")
             else:
                 temp.write("       0.14       0.500\n")
@@ -80,7 +77,7 @@ class MeangenCompressorInput:
             # NOTE: couldn't find it
             if self.force_blockage_factors:
                 raise NotImplementedError("couldn't find it lol")
-            
+
             else:
                 temp.write("   0.00000   0.00000     \n")
 
@@ -188,7 +185,8 @@ class RunCFD:
         else:
             raise OSError("Yeah I dunno what kinda OS you're running but it's wrong :)")
 
-        self.meangen_inp = MeangenCompressorInput(fan, exec_extension=self.exec_extension)
+        self.fan = fan
+        self.meangen_inp = MeangenCompressorInput(self.fan, exec_extension=self.exec_extension)
         self.result_dir = os.getcwd() + "/" + result_dir
 
         if os.path.isdir(self.result_dir):
@@ -201,14 +199,13 @@ class RunCFD:
         os.mkdir(self.result_dir)
 
     def run_all(self):
-        self.generate_meangen_input()
-        print('dummy input here:')
-        dummy = input()
+        self.generate_stagen_input()
+        input("pause")
         self.run_stagen()
         self.run_multall()
         self.post_process()
 
-    def generate_meangen_input(self):
+    def generate_stagen_input(self):
         force_vals = [i for i in self.meangen_inp.__dict__ if "force" in i]
         for fv in force_vals:
             print(f"{fv} is set to {self.meangen_inp.__dict__[fv]}")
@@ -216,6 +213,7 @@ class RunCFD:
         time.sleep(2)
         self.meangen_inp.generate_input_file()
         self.meangen_inp.run_meangen()
+        self.post_process_meangen()
 
     def run_stagen(self):
         # figure out what the fuck
@@ -233,8 +231,10 @@ class RunCFD:
         if not os.path.isfile("intype"):
             with open(f"{os.getcwd()}/intype", "w") as f:
                 f.write("N")
+        print("========\nRunning Multall\n========")
         p = subprocess.Popen(f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension} <stage_new.dat >results.out", shell=True)
         p.wait()
+
     def post_process(self):
         # move some junk as well
         raise NotImplementedError()
@@ -242,6 +242,23 @@ class RunCFD:
     def refine_mesh(self):
         # change IM and KM in stagen.dat
         pass
+
+    def post_process_meangen(self):
+        n_rows = 2
+        i = 0
+        numbers = [self.fan.no_blades_rotor, self.fan.no_blades_stator]
+
+        with open("stagen.dat") as file:
+            raw = file.readlines()
+        for line in raw:
+            if "NUMBER OF BLADES IN ROW. " in line:
+                raw[raw.index(line)] = f"{numbers[i]}      NUMBER OF BLADES IN ROW. \n"
+                i += 1
+                if i == n_rows:
+                    break
+        with open("stagen.dat", "w") as file:
+            for line in raw:
+                file.write(line)
 
 
 if __name__ == "__main__":
