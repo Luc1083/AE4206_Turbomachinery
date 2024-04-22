@@ -6,6 +6,8 @@ import subprocess
 import meanline as ml
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 
 def angle_between_vectors(v1, v2=np.array([1, 0])):
     return np.arccos(v1.dot(v2) / np.linalg.norm(v1) / np.linalg.norm(v2))
@@ -43,128 +45,123 @@ class MeangenCompressorInput:
         self.exec_extension = exec_extension
 
     def generate_input_file(self):
-        with open(f"{os.getcwd()}/meangen.in", "w") as self.temp:
-            self.temp.write("C\n")  # compressor
-            self.temp.write("AXI\n")  # axial
-            self.temp.write(f"{self.fan.R_air :.3f}     {self.fan.gamma :.3f}\n")  # sets R and Gamma
-            self.temp.write(f"{self.fan.P0_inlet / 1e5 :.3f} {self.fan.T0_inlet :.3f}\n")  # provide inlet total values
-            self.temp.write("1\n")  # set number of stages
-            self.temp.write("M\n")  # specify design at mean line
-            self.temp.write(f"{self.fan.omega}\n")  # fan RPM
-            self.temp.write(f"{self.fan.mdot :.3f}\n")  # fan mass flow
-            self.temp.write("A\n")  # specify that duty coefficients will be provided
+        with open(f"{os.getcwd()}/meangen.in", "w") as temp:
+            temp.write("C\n")  # compressor
+            temp.write("AXI\n")  # axial
+            temp.write(f"{self.fan.R_air :.3f}     {self.fan.gamma :.3f}\n")  # sets R and Gamma
+            temp.write(f"{self.fan.P0_inlet / 1e5 :.3f} {self.fan.T0_inlet :.3f}\n")  # provide inlet total values
+            temp.write("1\n")  # set number of stages
+            temp.write("M\n")  # specify design at mean line
+            temp.write(f"{self.fan.omega}\n")  # fan RPM
+            temp.write(f"{self.fan.mdot :.3f}\n")  # fan mass flow
+            temp.write("A\n")  # specify that duty coefficients will be provided
 
-            self.temp.write(
+            temp.write(
                 f"{self.fan.R_mean :.3f}, {self.fan.theta_rotor_distribution[self.fan.rotor_mean_idx]:.3f}, "
                 f"{self.fan.psi_mean :.3f}\n")  # provide duty coeffs: reaction, flow, loading
-            self.temp.write("A\n")  # set method to specify tip radius
-            self.temp.write(f"{self.fan.r_tip :.5}\n")  # specify tip radius in meters
+            temp.write("A\n")  # set method to specify tip radius
+            temp.write(f"{self.fan.r_tip :.5}\n")  # specify tip radius in meters
 
             # set our own chord lengths or use meangen values
             if self.force_axial_chords:
-                self.temp.write(f"{self.fan.c_mean_rotor :.5} {self.fan.c_mean_stator :.5}\n")
+                temp.write(f"{self.fan.c_mean_rotor :.5} {self.fan.c_mean_stator :.5}\n")
             else:
-                self.temp.write("       0.050       0.040\n")
+                temp.write("       0.050       0.040\n")
 
             # set our own row/stage gaps or use defaults
             # NOTE: I don't know if we compute this as of right now
             if self.force_axial_gaps:
                 raise NotImplementedError("couldn't find it lol")
             else:
-                self.temp.write("       0.250       0.500\n")
+                temp.write("       0.250       0.500\n")
 
             # set our own blockage factors or use defaults. Factors provided at LE of row 1, and TE of row 2.
             # NOTE: couldn't find it
             if self.force_blockage_factors:
                 raise NotImplementedError("couldn't find it lol")
             else:
-                self.temp.write("   0.00000   0.00000     \n")
+                temp.write("   0.00000   0.00000     \n")
 
             # set our own stage efficiency or use default
             if self.force_eta:
-                raise NotImplementedError("Could not find it lol")
-                # self.temp.write(f"    {self.fan.eta}")
+                temp.write(f"{self.fan.eta_tt_estimated}\n")
+                # temp.write(f"    {self.fan.eta}")
             else:
-                self.temp.write("       0.900\n")
+                temp.write("       0.900\n")
 
             # set our own deviation angles or use default
             if self.force_deviation:
-                self.temp.write(f"{self.fan.delta_rotor[self.fan.rotor_mean_idx] :.3f} "  # do not remove space
+                temp.write(f"{self.fan.delta_rotor[self.fan.rotor_mean_idx] :.3f} "  # do not remove space
                                 f"{self.fan.delta_stator[self.fan.stator_mean_idx] :.3f}\n")
             else:
-                self.temp.write("   5.000   5.000\n")
+                temp.write("   5.000   5.000\n")
 
             # set our own incidence angles or use default
             if self.force_incidence:
-                self.temp.write(f"{self.fan.i_rotor[self.fan.rotor_mean_idx] :.3f} "
+                temp.write(f"{self.fan.i_rotor[self.fan.rotor_mean_idx] :.3f} "
                                 f"{self.fan.i_stator[self.fan.stator_mean_idx] :.3f}\n")
             else:
-                self.temp.write("  -2.000  -2.000\n")
+                temp.write("  -2.000  -2.000\n")
 
             # twist fraction, 1 is free vortex, 0 is prismatic
             if self.force_twist_fact:
-                self.temp.write(f"{self.fan.n :.4f}\n")
+                temp.write(f"{self.fan.n :.4f}\n")
             else:
-                self.temp.write("   1.00000      \n")
+                temp.write("   1.00000      \n")
 
             # rotation option
-            self.temp.write("N\n")  # We're not rotating sections rn I think, so I'm tactically ignoring this.
+            temp.write("N\n")  # We're not rotating sections rn I think, so I'm tactically ignoring this.
 
             if self.force_Q0:
                 # Rotor angles
 
-                rot_angle_in = np.deg2rad(
+                rot_angle_in = np.rad2deg(
                     angle_between_vectors(np.array([(self.fan.c_hub_rotor - self.fan.c_tip_rotor) / 2,
                                                     self.fan.r_tip - self.fan.r_hub_inlet_rotor])))
-                rot_angle_out = np.deg2rad(
-                    angle_between_vectors(np.array([(self.fan.c_hub_rotor - self.fan.c_tip_rotor) / 2,
-                                                    self.fan.r_tip - self.fan.r_hub_inlet_stator]))
-                )
-                self.temp.write(f" {rot_angle_in :.3f} {rot_angle_out :.3f}")
-
+                rot_angle_out = 180 - rot_angle_in
                 # stator angles
-                stat_angle_in = np.deg2rad(
+                stat_angle_in = np.rad2deg(
                     angle_between_vectors(np.array([(self.fan.c_hub_stator - self.fan.c_tip_stator) / 2,
                                                     self.fan.r_tip - self.fan.r_hub_inlet_rotor])))
-                stat_angle_out = np.deg2rad(
-                    angle_between_vectors(np.array([(self.fan.c_hub_stator - self.fan.c_tip_stator) / 2,
-                                                    self.fan.r_tip - self.fan.r_hub_outlet_stator]))
-                )
-                self.temp.write(f" {stat_angle_in :.3f} {stat_angle_out :.3f}")
+                stat_angle_out = 180 - stat_angle_in
+
+                temp.write(f" {rot_angle_in :.3f} {rot_angle_out :.3f}\n")
+                temp.write(f" {stat_angle_in :.3f} {stat_angle_out :.3f}\n")
+
             else:
-                self.temp.write(
+                temp.write(
                     "  88.000  92.000\n")  # accepts default "Q0" angles for blade row 1. I have no idea what that is.
-                self.temp.write(
+                temp.write(
                     "  92.000  88.000\n")  # accepts default "Q0" angles for blade row 2. I have no idea what that is.
-                self.temp.write("N\n")  # again tells the thing to not rotate sections.
-            self.temp.write("Y\n")  # output to stagen.dat
+            temp.write("N\n")  # again tells the thing to not rotate sections.
+            temp.write("Y\n")  # output to stagen.dat
 
             if self.force_blade_tc_loc:
                 warnings.warn("I don't think we specify the location of the max T/C, "
                               "replace the 0.4 below if I'm wrong\n")
-                self.temp.write("N\n")  # do not accept defaults
+                temp.write("N\n")  # do not accept defaults
                 # rotor
-                self.temp.write(f"{self.fan.t_c_rotor[0]} {0.4 :.5}\n")  # root
-                self.temp.write(f"{self.fan.t_c_rotor[self.fan.rotor_mean_idx]} {0.4 :.5}\n")  # mid
-                self.temp.write(f"{self.fan.t_c_rotor[-1]} {0.4 :.5}\n")  # tip
+                temp.write(f"{self.fan.t_c_rotor[0]} {0.4 :.5}\n")  # root
+                temp.write(f"{self.fan.t_c_rotor[self.fan.rotor_mean_idx]} {0.4 :.5}\n")  # mid
+                temp.write(f"{self.fan.t_c_rotor[-1]} {0.4 :.5}\n")  # tip
 
-                self.temp.write("N\n")  # do not accept defaults
-                self.temp.write(f"{self.fan.t_c_stator[0] :.5} {0.45 :.5}\n")  # root
-                self.temp.write(f"{self.fan.t_c_stator[self.fan.stator_mean_idx] :.5} {0.45 :.5}\n")  # mid
-                self.temp.write(f"{self.fan.t_c_stator[-1] :.5} {0.45 :.5}\n")  # tip
+                temp.write("N\n")  # do not accept defaults
+                temp.write(f"{self.fan.t_c_stator[0] :.5} {0.45 :.5}\n")  # root
+                temp.write(f"{self.fan.t_c_stator[self.fan.stator_mean_idx] :.5} {0.45 :.5}\n")  # mid
+                temp.write(f"{self.fan.t_c_stator[-1] :.5} {0.45 :.5}\n")  # tip
                 warnings.warn("I'm assuming the sections 1, 2, and 3 map to the root, mean, and tip sections. "
                               "If you see this warning that means I have not checked it yet.\n")
             else:
-                self.temp.write("N\n")  # do not accept defaults
+                temp.write("N\n")  # do not accept defaults
                 # rotor
-                self.temp.write(f"  0.0750  0.4000\n")  # root
-                self.temp.write(f"  0.0750  0.4000\n")  # mid
-                self.temp.write(f"  0.0750  0.4000\n")  # tip
+                temp.write(f"  0.0750  0.4000\n")  # root
+                temp.write(f"  0.0750  0.4000\n")  # mid
+                temp.write(f"  0.0750  0.4000\n")  # tip
 
-                self.temp.write("N\n")  # do not accept defaults
-                self.temp.write("  0.1000  0.4500\n")  # root
-                self.temp.write("  0.1000  0.4500\n")  # mid
-                self.temp.write("  0.1000  0.4500\n")  # tip
+                temp.write("N\n")  # do not accept defaults
+                temp.write("  0.1000  0.4500\n")  # root
+                temp.write("  0.1000  0.4500\n")  # mid
+                temp.write("  0.1000  0.4500\n")  # tip
 
         print("Meangen input file written")
 
@@ -232,7 +229,7 @@ class RunCFD:
         if not os.path.isfile("intype"):
             with open(f"{os.getcwd()}/intype", "w") as f:
                 f.write("N")
-        p = subprocess.run([f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension}", "<stagen_new.dat", ">results.out"])
+        p = subprocess.Popen(f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension} <stage_new.dat >results.out", shell=True)
 
     def post_process(self):
         # move some junk as well
@@ -244,10 +241,11 @@ class RunCFD:
 
 
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=7, AR_stator=10, taper_rotor=2, taper_stator=0.5, n=1, no_blades_rotor=18,
-               no_blades_stator=60, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-               hub_tip_ratio=0.8, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
-               lieblein_model=ml.Lieblein_Model(),
-               profile="NACA-65", methodology="free vortex")
+    f = ml.Fan(Mach_inlet=0.6, AR_rotor=5, AR_stator=3, taper_rotor=3, taper_stator=0.802, n=0.72, no_blades_rotor=40,
+                 no_blades_stator=38, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+                 hub_tip_ratio=0.5, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+                 lieblein_model=ml.Lieblein_Model(),
+                 profile="NACA-65", methodology="free vortex")
     cfd = RunCFD(f, "run")
+    # cfd.meangen_inp.force_Q0 = 0
     cfd.run_all()
