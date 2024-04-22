@@ -14,9 +14,9 @@ def angle_between_vectors(v1, v2=np.array([1, 0])):
 
 
 class MeangenCompressorInput:
-    def __init__(self, fan: ml.Fan, force_axial_chords: bool = False, force_axial_gaps: bool = False,
+    def __init__(self, fan: ml.Fan, force_axial_chords: bool = True, force_axial_gaps: bool = False,
                  force_blockage_factors: bool = False, force_deviation: bool = True, force_eta: bool = False,
-                 force_incidence: bool = True, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
+                 force_incidence: bool = False, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
                  force_q0: bool = True, exec_extension=""):
         """
         Constructs Meangen input file. Requires fan object as input. Other arguments are optional, and determine whether
@@ -71,14 +71,16 @@ class MeangenCompressorInput:
             # set our own row/stage gaps or use defaults
             # NOTE: I don't know if we compute this as of right now
             if self.force_axial_gaps:
-                raise NotImplementedError("couldn't find it lol")
+                #raise NotImplementedError("couldn't find it lol")
+                temp.write(f"{self.fan.spacing_rows :.5} 0.5\n")
             else:
-                temp.write("       0.250       0.500\n")
+                temp.write("       0.14       0.500\n")
 
             # set our own blockage factors or use defaults. Factors provided at LE of row 1, and TE of row 2.
             # NOTE: couldn't find it
             if self.force_blockage_factors:
                 raise NotImplementedError("couldn't find it lol")
+            
             else:
                 temp.write("   0.00000   0.00000     \n")
 
@@ -200,6 +202,8 @@ class RunCFD:
 
     def run_all(self):
         self.generate_meangen_input()
+        print('dummy input here:')
+        dummy = input()
         self.run_stagen()
         self.run_multall()
         self.post_process()
@@ -229,7 +233,7 @@ class RunCFD:
         if not os.path.isfile("intype"):
             with open(f"{os.getcwd()}/intype", "w") as f:
                 f.write("N")
-        p = subprocess.Popen(f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension} <stage_new.dat >multall.log", shell=True)
+        p = subprocess.Popen(f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension} <stage_new.dat >results.out", shell=True)
         p.wait()
     def post_process(self):
         # move some junk as well
@@ -241,11 +245,11 @@ class RunCFD:
 
 
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=5, AR_stator=3, taper_rotor=1, taper_stator=0.802, n=0.72, no_blades_rotor=40,
-                 no_blades_stator=38, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-                 hub_tip_ratio=0.5, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
-                 lieblein_model=ml.Lieblein_Model(),
-                 profile="NACA-65", methodology="free vortex")
+    f = ml.Fan(Mach_inlet=0.7, AR_rotor=4, AR_stator=4, taper_rotor=1.4, taper_stator=0.7, n=0.8, no_blades_rotor=30,
+                no_blades_stator=30, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+                hub_tip_ratio=0.1, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+                lieblein_model=ml.Lieblein_Model(),
+                profile="NACA-65", methodology="free vortex")
     cfd = RunCFD(f, "run")
     # cfd.meangen_inp.force_Q0 = 0
     cfd.run_all()
