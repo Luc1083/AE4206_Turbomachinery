@@ -1,14 +1,21 @@
+import time
 import warnings
 from sys import platform
 import os
 import subprocess
 import meanline as ml
+import numpy as np
+
+
+def angle_between_vectors(v1, v2=np.array([1, 0])):
+    return np.arcos(v1.dot(v2) / np.linalg.norm(v1) / np.linalg.norm(v2))
 
 
 class MeangenCompressorInput:
     def __init__(self, fan: ml.Fan, force_axial_chords: bool = False, force_axial_gaps: bool = False,
                  force_blockage_factors: bool = False, force_deviation: bool = True, force_eta: bool = False,
-                 force_incidence: bool = True, force_twist_factor: bool = True, force_blade_tc_loc: bool = True):
+                 force_incidence: bool = True, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
+                 force_q0: bool = True, exec_extension=""):
         """
         Constructs Meangen input file. Requires fan object as input. Other arguments are optional, and determine whether
         the values from the fan object are forced or meangen defaults are used.
@@ -21,6 +28,7 @@ class MeangenCompressorInput:
         :param force_incidence: Bool, default True
         :param force_twist_factor: Bool, default True
         :param force_blade_tc_loc: Bool, default True. Only partially implemented
+        :param exec_extension: file extension for executable
         """
         self.force_blade_tc_loc = force_blade_tc_loc
         self.force_twist_fact = force_twist_factor
@@ -31,13 +39,8 @@ class MeangenCompressorInput:
         self.force_axial_gaps = force_axial_gaps
         self.fan = fan
         self.force_axial_chords = force_axial_chords
-
-        if platform == "linux":
-            self.str_add = ""
-        elif platform == "win32" or platform == "win64":
-            self.str_add = ".exe"
-        else:
-            raise OSError("Yeah I dunno what kinda OS you're running but it's wrong :)")
+        self.force_Q0 = force_q0
+        self.exec_extension = exec_extension
 
     def generate_input_file(self):
         with open("./meangen.in", "w") as self.temp:
@@ -104,14 +107,36 @@ class MeangenCompressorInput:
             else:
                 self.temp.write("   1.00000      \n")
 
-            # rotation option (we don't)
+            # rotation option
             self.temp.write("N\n")  # We're not rotating sections rn I think, so I'm tactically ignoring this.
 
-            self.temp.write(
-                "  88.000  92.000\n")  # accepts default "Q0" angles for blade row 1. I have no idea what that is.
-            self.temp.write(
-                "  92.000  88.000\n")  # accepts default "Q0" angles for blade row 2. I have no idea what that is.
-            self.temp.write("N\n")  # again tells the thing to not rotate sections.
+            if self.force_Q0:
+                # Rotor angles
+
+                rot_angle_in = np.deg2rad(
+                    angle_between_vectors(np.array([(self.fan.c_hub_rotor - self.fan.c_tip_rotor) / 2,
+                                                    self.fan.r_tip - self.fan.r_hub_inlet_rotor])))
+                rot_angle_out = np.deg2rad(
+                    angle_between_vectors(np.array([(self.fan.c_hub_rotor - self.fan.c_tip_rotor) / 2,
+                                                    self.fan.r_tip - self.fan.r_hub_inlet_stator]))
+                )
+                self.temp.write(f" {rot_angle_in :.3f} {rot_angle_out :.3f}")
+
+                # stator angles
+                stat_angle_in = np.deg2rad(
+                    angle_between_vectors(np.array([(self.fan.c_hub_stator - self.fan.c_tip_stator) / 2,
+                                                    self.fan.r_tip - self.fan.r_hub_inlet_rotor])))
+                stat_angle_out = np.deg2rad(
+                    angle_between_vectors(np.array([(self.fan.c_hub_stator - self.fan.c_tip_stator) / 2,
+                                                    self.fan.r_tip - self.fan.r_hub_outlet_stator]))
+                )
+                self.temp.write(f" {stat_angle_in :.3f} {stat_angle_out :.3f}")
+            else:
+                self.temp.write(
+                    "  88.000  92.000\n")  # accepts default "Q0" angles for blade row 1. I have no idea what that is.
+                self.temp.write(
+                    "  92.000  88.000\n")  # accepts default "Q0" angles for blade row 2. I have no idea what that is.
+                self.temp.write("N\n")  # again tells the thing to not rotate sections.
             self.temp.write("Y\n")  # output to stagen.dat
 
             if self.force_blade_tc_loc:
@@ -144,8 +169,7 @@ class MeangenCompressorInput:
         print("Meangen input file written")
 
     def run_meangen(self):
-        cmd = f"./execs/meangen-17.4{self.str_add}"
-        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(f"./execs/meangen-17.4{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
         p.stdin.write(bytes("F", "utf-8"))
         p.stdin.flush()
         p.stdin.close()
@@ -153,15 +177,66 @@ class MeangenCompressorInput:
         if p.returncode != 0:
             raise ChildProcessError("Goofy ahh Meangen code died")
         else:
-            print("Meangen finished, moving files")
+            print("*********\nMeangen finished\n*********")
 
 
 class RunCFD:
-    def __init__(self):
-        ...
+    def __init__(self, fan: ml.Fan, result_dir: str, overwrite=True):
+        if platform == "linux":
+            self.exec_extension = ""
+        elif platform == "win32" or platform == "win64":
+            self.exec_extension = ".exe"
+        else:
+            raise OSError("Yeah I dunno what kinda OS you're running but it's wrong :)")
+
+        self.meangen_inp = MeangenCompressorInput(fan, exec_extension=self.exec_extension)
+        self.result_dir = os.getcwd() + "/" + result_dir
+
+        if os.path.isdir(self.result_dir):
+            print("Overwriting existing result dir, it contains:")
+            print(os.listdir(self.result_dir))
+            if not overwrite:
+                warnings.warn("Code is not set to overwrite so we're done")
+                exit()
+            os.rmdir(self.result_dir)
+        os.mkdir(self.result_dir)
+
+    def run_all(self):
+        self.generate_meangen_input()
+        self.run_stagen()
+        self.run_multall()
+        self.post_process()
+
+    def generate_meangen_input(self):
+        force_vals = [i for i in self.meangen_inp.__dict__ if "force" in i]
+        for fv in force_vals:
+            print(f"{fv} is set to {self.meangen_inp.__dict__[fv]}")
+        print("Make sure you're happy with this")
+        time.sleep(2)
+        self.meangen_inp.generate_input_file()
+        self.meangen_inp.run_meangen()
 
     def run_stagen(self):
-        ...
+        # figure out what the fuck
+        p = subprocess.Popen(f"./execs/stagen-18.1{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
+        p.stdin.write(bytes("Y", "utf-8"))
+        p.stdin.flush()
+        p.stdin.close()
+        p.wait()
+        if p.returncode != 0:
+            raise ChildProcessError("Goofy ahh Stagen code died")
+        else:
+            print("*********\nStagen finished\n*********")
+
+    def run_multall(self):
+        p = subprocess.run(f"./execs/multall-open-20.9{self.exec_extension} <stagen_new.dat >results.out")
+
+    def post_process(self):
+        raise NotImplementedError()
+
+    def refine_mesh(self):
+        # change IM and KM in stagen.dat
+        pass
 
 
 if __name__ == "__main__":
@@ -170,6 +245,5 @@ if __name__ == "__main__":
                hub_tip_ratio=0.3, gamma=1.4, R_air=287, eta_tt_estimated=0.9, Cp_air=1006, Cv_air=715.9,
                row_chord_spacing_ratio=0.5, lieblein_model=ml.Lieblein_Model(), profile="NACA-65",
                methodology="controlled vortex")
-    mci = MeangenCompressorInput(f)
-    mci.generate_input_file()
-    mci.run_meangen()
+    cfd = RunCFD(f, "run")
+    cfd.run_all()
