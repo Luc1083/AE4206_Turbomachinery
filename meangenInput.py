@@ -13,9 +13,9 @@ def angle_between_vectors(v1, v2=np.array([1, 0])):
 
 
 class MeangenCompressorInput:
-    def __init__(self, fan: ml.Fan, force_axial_chords: bool = True, force_axial_gaps: bool = False,
-                 force_blockage_factors: bool = False, force_deviation: bool = True, force_eta: bool = False,
-                 force_incidence: bool = False, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
+    def __init__(self, fan: ml.Fan, force_axial_chords: bool = True, force_axial_gaps: bool = True,
+                 force_blockage_factors: bool = False, force_deviation: bool = True, force_eta: bool = True,
+                 force_incidence: bool = True, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
                  force_q0: bool = True, exec_extension=""):
         """
         Constructs Meangen input file. Requires fan object as input. Other arguments are optional, and determine whether
@@ -58,8 +58,8 @@ class MeangenCompressorInput:
             temp.write(
                 f"{self.fan.R_mean :.3f}, {self.fan.theta_rotor_distribution[self.fan.rotor_mean_idx]:.3f}, "
                 f"{self.fan.psi_mean :.3f}\n")  # provide duty coeffs: reaction, flow, loading
-            temp.write("A\n")  # set method to specify tip radius
-            temp.write(f"{self.fan.r_mean_rotor :.5}\n")  # specify tip radius in meters
+            temp.write("A\n")  # set method to specify mean radius
+            temp.write(f"{self.fan.r_mean_rotor :.5}\n")  # specify mean radius in meters
 
             # set our own chord lengths or use meangen values
             if self.force_axial_chords:
