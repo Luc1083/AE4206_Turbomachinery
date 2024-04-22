@@ -5,6 +5,7 @@ import os
 import subprocess
 import meanline as ml
 import numpy as np
+import PostPy.Components as PP
 
 
 def angle_between_vectors(v1, v2=np.array([1, 0])):
@@ -237,10 +238,6 @@ class RunCFD:
                              shell=True)
         p.wait()
 
-    def post_process(self):
-        # move some junk as well
-        raise NotImplementedError()
-
     def refine_mesh(self):
         # change IM and KM in stagen.dat
         pass
@@ -263,6 +260,7 @@ class RunCFD:
                 file.write(line)
 
 
+
 if __name__ == "__main__":
     f = ml.Fan(Mach_inlet=0.6, AR_rotor=3, AR_stator=3, taper_rotor=0.7, taper_stator=0.7, n=0.8, no_blades_rotor=30,
                no_blades_stator=30, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
@@ -272,3 +270,23 @@ if __name__ == "__main__":
     cfd = RunCFD(f, "run")
     cfd.meangen_inp.force_deviation = False
     cfd.run_all()
+
+    usr = str(input("Type 'Y' to post-process:\n"))
+    if usr in "yY":
+        tm = PP.Turbomachine()
+        tm.plot.convergence_history()
+        tm.plot.variable_B2B("M_rel")
+        tm.plot.variable_B2B("P")
+
+        usr = str(input("Type 'Y' to make Paraview files:\n"))
+        if usr in "yY":
+            usr = float(input("Enter a fraction of the rotor and stator circumference to show:\n"))
+            if 0.0 <usr < 1.0:
+                raise ValueError(f"Wrong input: {usr} is not a fraction between 0 and 1")
+            nrot = int(cfd.fan.no_blades_rotor*usr)
+            nstat = int(cfd.fan.no_blades_stator*usr)
+            tm.rows[0].N_instances = nrot
+            tm.rows[1].N_instances = nrot
+            tm.gen_ParaView_input()
+
+
