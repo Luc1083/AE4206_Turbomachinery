@@ -8,7 +8,7 @@ import numpy as np
 
 
 def angle_between_vectors(v1, v2=np.array([1, 0])):
-    return np.arcos(v1.dot(v2) / np.linalg.norm(v1) / np.linalg.norm(v2))
+    return np.arccos(v1.dot(v2) / np.linalg.norm(v1) / np.linalg.norm(v2))
 
 
 class MeangenCompressorInput:
@@ -229,9 +229,13 @@ class RunCFD:
             print("*********\nStagen finished\n*********")
 
     def run_multall(self):
-        p = subprocess.run(f"./execs/multall-open-20.9{self.exec_extension} <stagen_new.dat >results.out")
+        if not os.path.isfile("intype"):
+            with open("./intype", "w") as f:
+                f.write("N")
+        p = subprocess.run([f"./execs/multall-open-20.9{self.exec_extension}", "<stagen_new.dat", ">results.out"])
 
     def post_process(self):
+        # move some junk as well
         raise NotImplementedError()
 
     def refine_mesh(self):
