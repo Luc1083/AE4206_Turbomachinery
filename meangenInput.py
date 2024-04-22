@@ -58,7 +58,7 @@ class MeangenCompressorInput:
                 f"{self.fan.R_mean :.3f}, {self.fan.theta_rotor_distribution[self.fan.rotor_mean_idx]:.3f}, "
                 f"{self.fan.psi_mean :.3f}\n")  # provide duty coeffs: reaction, flow, loading
             temp.write("A\n")  # set method to specify tip radius
-            temp.write(f"{self.fan.r_tip :.5}\n")  # specify tip radius in meters
+            temp.write(f"{self.fan.r_mean_rotor :.5}\n")  # specify tip radius in meters
 
             # set our own chord lengths or use meangen values
             if self.force_axial_chords:
@@ -91,14 +91,14 @@ class MeangenCompressorInput:
             # set our own deviation angles or use default
             if self.force_deviation:
                 temp.write(f"{self.fan.delta_rotor[self.fan.rotor_mean_idx] :.3f} "  # do not remove space
-                                f"{self.fan.delta_stator[self.fan.stator_mean_idx] :.3f}\n")
+                           f"{self.fan.delta_stator[self.fan.stator_mean_idx] :.3f}\n")
             else:
                 temp.write("   5.000   5.000\n")
 
             # set our own incidence angles or use default
             if self.force_incidence:
                 temp.write(f"{self.fan.i_rotor[self.fan.rotor_mean_idx] :.3f} "
-                                f"{self.fan.i_stator[self.fan.stator_mean_idx] :.3f}\n")
+                           f"{self.fan.i_stator[self.fan.stator_mean_idx] :.3f}\n")
             else:
                 temp.write("  -2.000  -2.000\n")
 
@@ -165,7 +165,8 @@ class MeangenCompressorInput:
         print("Meangen input file written")
 
     def run_meangen(self):
-        p = subprocess.Popen(f"{os.getcwd()}/execs/meangen-17.4{self.exec_extension}", stdin=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(f"{os.getcwd()}/execs/meangen-17.4{self.exec_extension}", stdin=subprocess.PIPE,
+                             shell=True)
         p.stdin.write(bytes("F", "utf-8"))
         p.stdin.flush()
         p.stdin.close()
@@ -232,7 +233,8 @@ class RunCFD:
             with open(f"{os.getcwd()}/intype", "w") as f:
                 f.write("N")
         print("========\nRunning Multall\n========")
-        p = subprocess.Popen(f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension} <stage_new.dat >results.out", shell=True)
+        p = subprocess.Popen(f"{os.getcwd()}/execs/multall-open-20.9{self.exec_extension} <stage_new.dat >results.out",
+                             shell=True)
         p.wait()
 
     def post_process(self):
@@ -262,11 +264,11 @@ class RunCFD:
 
 
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.7, AR_rotor=4, AR_stator=4, taper_rotor=1.4, taper_stator=0.7, n=0.8, no_blades_rotor=30,
-                no_blades_stator=30, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-                hub_tip_ratio=0.1, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
-                lieblein_model=ml.Lieblein_Model(),
-                profile="NACA-65", methodology="free vortex")
+    f = ml.Fan(Mach_inlet=0.6, AR_rotor=3, AR_stator=3, taper_rotor=0.7, taper_stator=0.7, n=0.8, no_blades_rotor=30,
+               no_blades_stator=30, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+               hub_tip_ratio=0.3, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+               lieblein_model=ml.Lieblein_Model(),
+               profile="NACA-65", methodology="controlled vortex")
     cfd = RunCFD(f, "run")
-    # cfd.meangen_inp.force_Q0 = 0
+    cfd.meangen_inp.force_deviation = False
     cfd.run_all()
