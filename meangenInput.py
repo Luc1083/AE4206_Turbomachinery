@@ -83,18 +83,21 @@ class MeangenCompressorInput:
                 # geo = annulus - bladeThickness
                 raw = np.genfromtxt("mt_interp.txt")
                 a = intrp.interp1d(x=raw[:, 0], y=raw[:, 1], fill_value="extrapolate")
-                mom_thick_rot = a(self.fan.DF_rotor_distribution[self.fan.rotor_mean_idx])\
-                            * self.fan.c_mean_rotor * self.fan.no_blades_rotor
+                mom_thick_rot = a(self.fan.DF_rotor_distribution[self.fan.rotor_mean_idx]) \
+                                * self.fan.c_mean_rotor * self.fan.no_blades_rotor
 
                 geo_flow_area_rot = (self.fan.r_tip ** 2 - self.fan.r_hub_inlet_rotor ** 2) * np.pi - \
-                                (self.fan.r_tip - self.fan.r_hub_inlet_rotor) * self.fan.no_blades_rotor \
-                                * self.fan.t_c_rotor[self.fan.rotor_mean_idx] * self.fan.c_mean_rotor
+                                    (self.fan.r_tip - self.fan.r_hub_inlet_rotor) * self.fan.no_blades_rotor \
+                                    * self.fan.t_c_rotor[self.fan.rotor_mean_idx] * self.fan.c_mean_rotor
                 bf_rot = 1 - (geo_flow_area_rot - mom_thick_rot)
 
-                mom_thick_stat = a(self.fan.DF_stator_distribution[self.fan.stator_mean_idx]) * self.fan.c_mean_stator * self.fan.no_blades_stator
+                mom_thick_stat = a(self.fan.DF_stator_distribution[
+                                       self.fan.stator_mean_idx]) * self.fan.c_mean_stator * self.fan.no_blades_stator
 
-                geo_flow_area_stat = (self.fan.r_tip ** 2 - self.fan.r_hub_inlet_stator ** 2) * np.pi - (self.fan.r_tip - self.fan.r_hub_inlet_stator) \
-                                     * self.fan.no_blades_stator * self.fan.t_c_stator[self.fan.stator_mean_idx] * self.fan.c_mean_stator
+                geo_flow_area_stat = (self.fan.r_tip ** 2 - self.fan.r_hub_inlet_stator ** 2) * np.pi - (
+                            self.fan.r_tip - self.fan.r_hub_inlet_stator) \
+                                     * self.fan.no_blades_stator * self.fan.t_c_stator[
+                                         self.fan.stator_mean_idx] * self.fan.c_mean_stator
                 bf_stat = 1 - (geo_flow_area_stat - mom_thick_stat)
                 temp.write(f"{bf_rot :.5f} {bf_stat :.5f} \n")
 
@@ -279,11 +282,11 @@ class RunCFD:
                 file.write(line)
 
 
-
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.44214618 , AR_stator= 3.00467911, taper_rotor= 0.99972322, taper_stator= 0.67692271, n=  0.2035397 , no_blades_rotor=   38,
-             no_blades_stator= 40, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-             hub_tip_ratio= 0.2, gamma=1.4, R_air=287, eta_tt_estimated=0.9,  row_chord_spacing_ratio=1,
+    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.44214618, AR_stator=3.00467911, taper_rotor=0.99972322,
+               taper_stator=0.67692271, n=0.2035397, no_blades_rotor=38,
+               no_blades_stator=40, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+               hub_tip_ratio=0.2, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=1,
                lieblein_model=ml.Lieblein_Model(),
                profile="NACA-65", methodology="controlled vortex")
     cfd = RunCFD(f, "run")
@@ -306,5 +309,3 @@ if __name__ == "__main__":
             tm.rows[0].N_instances = nrot
             tm.rows[1].N_instances = nrot
             tm.gen_ParaView_input()
-
-
