@@ -6,48 +6,39 @@ from pymoo.core.problem import ElementwiseProblem
 
 class optimize_design_elementwise(ElementwiseProblem):
     def __init__(self):
-        super().__init__(n_var=8,
+
+        super().__init__(n_var=9,
                          n_obj=3,
-                         n_ieq_constr=3,
-                         xl=np.array([2, 3, 0.5, 0.5, 0.2, 25, 25, 0]),
-                         xu=np.array([5, 5, 1.0, 1.5, 2.0, 40, 40, 0.5]))
+                         n_ieq_constr=6,
+                         xl=np.array([0.55, 2, 3, 0.5, 0.5, 0.2, 25, 25, 0.2]),
+                         xu=np.array([0.7, 5, 5, 1.0, 1.5, 2.0, 50, 50, 0.5]))
 
     def _evaluate(self, x, out, *args, **kwargs):
-        # input_vector = [AR_rotor, AR_stator, taper_rotor, taper_stator, n, N_R, N_S, hub_tip_ratio]
-        # create design using Fan class and input vector
-        # Fan(omega,ratio,..., x1, x2, ..., x3,.., x4)
+        # input_vector = [Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, N_R, N_S, hub_tip_ratio]
 
-        design = Fan(Mach_inlet=0.6, AR_rotor=x[0], AR_stator=x[1], taper_rotor=x[2], taper_stator=x[3], n=x[4], no_blades_rotor=x[5],
-             no_blades_stator=x[6], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=x[7],
+        design = Fan(Mach_inlet=x[0], AR_rotor=x[1], AR_stator=x[2], taper_rotor=x[3], taper_stator=x[4], n=x[5], no_blades_rotor=x[6],
+             no_blades_stator=x[7], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=x[8],
              gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model(),
              profile="NACA-65", methodology='controlled vortex')
 
         # Objective functions
-        obj1 = design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated)
-        obj2 = np.pi * design.r_tip ** 2  # Minimise frontal area (pi() * r_tip ** 2)
-        obj3 = design.volume  # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
+        obj1 = 1 - design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated) / Maximise eta_tt_estimated
+        obj2 = np.pi * design.r_tip ** 2  # Minimise frontal area
+        obj3 = design.volume_value * design.titanium_blade_density  # Minimise weight
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = max(design.delta_rotor) - 15
-        const2 = max(design.delta_stator) - 15
-        #const3 = max(design.Mach_rotor) - 1.05
+        const1 = max(design.delta_rotor) - 8
+        const2 = max(design.delta_stator) - 8
+        const3 = max(design.Mach_rotor) - 1.3
+        const4 = max(design.solidity_rotor_distribution) - 2
+        const5 = max(design.DF_rotor_distribution) - 0.45
+        const6 = max(design.DF_stator_distribution) - 0.45
         # const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
         # const2 = np.abs(design.CV_residual_stator) - 1e-6
 
         # Stacking Objectives to "F" and Constraints to "G"
         out["F"] = np.column_stack([obj1, obj2, obj3])
-        out["G"] = np.column_stack([const1, const2])
-
-class optimize_plots:
-    def __init__(self, result):
-        X = result.X
-        F = result.F
-
-    def pareto_front_scatter3(self):
-        plt.scatter3(self.F[:, 0], self.F[:, 1], self.F[:, 2])
-
-    def pareto_front_scatter2(self):
-        plt.scatter(self.F[:, 0], self.F[:, 1])
+        out["G"] = np.column_stack([const1, const2, const3, const4, const5, const6])
 
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
@@ -289,10 +280,8 @@ class Fan:
             self.eta_tt_estimated = new_eta_tt
             n_iter += 1
 
-        # Calculate weight and volume of stage
-        self.volume = self.weight()
-        self.mass = self.volume * self.titanium_blade_density * 0.7
-
+        # Calculate Volume
+        self.volume_value = self.volume()
 
     def plot_meanline_vs_exit_props_differences(self):
         """
@@ -597,10 +586,13 @@ class Fan:
         mu=mu_0*((T/T_0)**(3/2))*((T_0+S_mu)/(T+S_mu))
         return mu
 
-    def weight(self):
-        volume = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * self.no_blades_rotor + \
-        0.5 * (self.c_hub_stator + self.c_tip_stator) * (self.h_blade_inlet_stator + self.h_blade_outlet_stator) / 2 * self.no_blades_stator
-        return volume
+    def volume(self):
+        volume_rotor = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * self.no_blades_rotor * \
+                 (self.c_hub_rotor + self.c_tip_rotor) / 2 * np.max(self.t_c_rotor)
+        volume_stator = 0.5 * (self.c_hub_stator + self.c_tip_stator) * (self.h_blade_inlet_stator + self.h_blade_outlet_stator) / 2 * self.no_blades_stator * \
+                 (self.c_hub_stator + self.c_tip_stator) / 2 * np.max(self.t_c_stator)
+        machine_volume = volume_stator + volume_rotor
+        return machine_volume
 
 
 class Fan_Plots:
