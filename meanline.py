@@ -5,11 +5,12 @@ import scipy.interpolate as intrp
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.core.variable import Real, Integer
 
+
 class optimize_design_elementwise(ElementwiseProblem):
     def __init__(self, **kwargs):
         vars = {
-            "M_inlet": Real(bounds=(0.55,0.7)),
-            "AR_rotor": Real(bounds=(2,5)),
+            "M_inlet": Real(bounds=(0.55, 0.7)),
+            "AR_rotor": Real(bounds=(2, 5)),
             "AR_stator": Real(bounds=(3, 5)),
             "taper_rotor": Real(bounds=(0.5, 1.0)),
             "taper_stator": Real(bounds=(0.5, 1.5)),
@@ -27,10 +28,13 @@ class optimize_design_elementwise(ElementwiseProblem):
     def _evaluate(self, X, out, *args, **kwargs):
         # input_vector = [Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, N_R, N_S, hub_tip_ratio]
 
-        design = Fan(Mach_inlet=X["M_inlet"], AR_rotor=X["AR_rotor"], AR_stator=X["AR_stator"], taper_rotor=X["taper_rotor"], taper_stator=X["taper_stator"], n=X["n"], no_blades_rotor=X["N_R"],
-             no_blades_stator=X["N_S"], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=X["hub_tip_ratio"],
-             gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model(),
-             profile="NACA-65", methodology='controlled vortex')
+        design = Fan(Mach_inlet=X["M_inlet"], AR_rotor=X["AR_rotor"], AR_stator=X["AR_stator"],
+                     taper_rotor=X["taper_rotor"], taper_stator=X["taper_stator"], n=X["n"], no_blades_rotor=X["N_R"],
+                     no_blades_stator=X["N_S"], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+                     hub_tip_ratio=X["hub_tip_ratio"],
+                     gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+                     lieblein_model=Lieblein_Model(),
+                     profile="NACA-65", methodology='controlled vortex')
 
         # Objective functions
         obj1 = 1 - design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated) / Maximise eta_tt_estimated
@@ -53,10 +57,11 @@ class optimize_design_elementwise(ElementwiseProblem):
         out["F"] = np.column_stack([obj1, obj2, obj3])
         out["G"] = np.column_stack([const1, const2, const3, const4, const5, const6, const7])
 
+
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
                  beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air, eta_tt_estimated,
-                 row_chord_spacing_ratio, lieblein_model, profile, methodology):
+                 row_chord_spacing_ratio, lieblein_model, profile, methodology, t_c_rotor, t_c_stator):
 
         # Assign properties
         self.Mach_inlet = Mach_inlet
@@ -112,8 +117,8 @@ class Fan:
         self.theta = self.v_axial / self.U_mean
 
         # Calculate residual for rotor & stator
-        #self.CV_residual_rotor = self.calc_stall_margin(self)
-        #self.CV_residual_stator = self.calc_stall_margin(self)
+        # self.CV_residual_rotor = self.calc_stall_margin(self)
+        # self.CV_residual_stator = self.calc_stall_margin(self)
 
         # Here convergence loop should be started based on convergence of eta_tt
         difference = 1
@@ -226,8 +231,8 @@ class Fan:
             # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
 
             # For the sake of testing assume constant tc
-            self.t_c_rotor = np.ones(self.no_points) * 0.10
-            self.t_c_stator = np.ones(self.no_points) * 0.10
+            self.t_c_rotor = t_c_rotor
+            self.t_c_stator = t_c_stator
 
             # For the sake of testing calculate ts ratio
             self.t_s_rotor = self.solidity_rotor_distribution * self.t_c_rotor
@@ -255,20 +260,29 @@ class Fan:
             self.stator_blade_beta1 = self.alpha_1_stator_distribution - self.i_stator * np.pi / 180
             self.stator_blade_beta2 = self.alpha_2_stator_distribution + self.delta_stator * np.pi / 180
 
+            # Calculate forces and stresses
+            self.Fm_stator, self.Ft_stator, self.Mt_stator, self.max_stress_stator = self.stator_force()
+            self.Fm_rotor, self.Ft_rotor, self.Fr_rotor, self.Mt_rotor, self.max_stress_rotor = self.rotor_force()
+
+
             # Calculate losses
-            DF_rotor=1-np.cos(abs(self.beta_1))/np.cos(abs(self.beta_2))+(np.cos(abs(self.beta_1))/2*self.rotor_solidity_mean)*(np.tan(abs(self.beta_1))-np.tan(abs(self.beta_2)))
-            DF_stator=1-np.cos(abs(self.alpha_2))/np.cos(abs(0))+(np.cos(abs(self.alpha_2))/2*self.stator_solidity_mean)*(np.tan(abs(self.alpha_2))-np.tan(abs(0)))
+            DF_rotor = 1 - np.cos(abs(self.beta_1)) / np.cos(abs(self.beta_2)) + (
+                        np.cos(abs(self.beta_1)) / 2 * self.rotor_solidity_mean) * (
+                                   np.tan(abs(self.beta_1)) - np.tan(abs(self.beta_2)))
+            DF_stator = 1 - np.cos(abs(self.alpha_2)) / np.cos(abs(0)) + (
+                        np.cos(abs(self.alpha_2)) / 2 * self.stator_solidity_mean) * (
+                                    np.tan(abs(self.alpha_2)) - np.tan(abs(0)))
             Mach_0 = self.w_1 / np.sqrt(self.gamma * self.R_air * self.T_inlet)
             Mach_1 = self.v_2 / np.sqrt(self.R_air * self.gamma * self.T_exit_rotor)
             Mach_2 = self.M_exit_stator
-            self.mean_tc_rotor=self.t_c_rotor[self.rotor_mean_idx]
-            self.mean_tc_stator=self.t_c_stator[self.stator_mean_idx]
-            t_s_rotor=self.mean_tc_rotor*self.rotor_solidity_mean
-            t_s_stator=self.mean_tc_stator*self.stator_solidity_mean
-            spacing_rotor=self.c_mean_rotor/self.rotor_solidity_mean
-            spacing_stator=self.c_mean_stator/self.stator_solidity_mean
-            camber_angle_mean_rotor=np.deg2rad(self.chamber_angle_rotor[self.rotor_mean_idx])
-            camber_angle_mean_stator=np.deg2rad(self.chamber_angle_stator[self.stator_mean_idx])
+            self.mean_tc_rotor = self.t_c_rotor[self.rotor_mean_idx]
+            self.mean_tc_stator = self.t_c_stator[self.stator_mean_idx]
+            t_s_rotor = self.mean_tc_rotor * self.rotor_solidity_mean
+            t_s_stator = self.mean_tc_stator * self.stator_solidity_mean
+            spacing_rotor = self.c_mean_rotor / self.rotor_solidity_mean
+            spacing_stator = self.c_mean_stator / self.stator_solidity_mean
+            camber_angle_mean_rotor = np.deg2rad(self.chamber_angle_rotor[self.rotor_mean_idx])
+            camber_angle_mean_stator = np.deg2rad(self.chamber_angle_stator[self.stator_mean_idx])
             self.dn_bl = sum(
                 self.calc_BL_loss(DF_rotor, DF_stator,
                                   self.stator_solidity_mean, self.rotor_solidity_mean, abs(self.beta_1),
@@ -281,14 +295,19 @@ class Fan:
             #                           self.c_mean_rotor, Mach_0, Mach_1))
             # self.dn_tl=self.calc_tip_leakage_loss(self.h_blade_rotor,self.rotor_solidity_mean,abs(self.beta_1),self.theta,self.psi_mean,abs(self.beta_2),self.rho_exit_rotor,
             #                                           self.dyn_visc,self.w_1,self.c_mean_rotor,Mach_0)
-            
-            self.rotor_loss=sum(self.calc_rotor_loss(0.002,abs(self.beta_1),abs(self.beta_2),Mach_1,self.gamma,self.R_air,self.T_inlet,camber_angle_mean_rotor,t_s_rotor,
-                                                 -0.15,self.rho_exit_rotor,self.w_1,self.c_mean_rotor, spacing_rotor))
-            self.stator_loss=sum(self.calc_stator_loss(0.002,self.alpha_2,0,Mach_2,self.gamma,self.R_air,self.T_exit_rotor,camber_angle_mean_stator,t_s_stator,
-                                                 -0.15,self.rho_exit_stator,self.v_2,self.c_mean_stator, spacing_stator))
+
+            self.rotor_loss = sum(
+                self.calc_rotor_loss(0.002, abs(self.beta_1), abs(self.beta_2), Mach_1, self.gamma, self.R_air,
+                                     self.T_inlet, camber_angle_mean_rotor, t_s_rotor,
+                                     -0.15, self.rho_exit_rotor, self.w_1, self.c_mean_rotor, spacing_rotor))
+            self.stator_loss = sum(
+                self.calc_stator_loss(0.002, self.alpha_2, 0, Mach_2, self.gamma, self.R_air, self.T_exit_rotor,
+                                      camber_angle_mean_stator, t_s_stator,
+                                      -0.15, self.rho_exit_stator, self.v_2, self.c_mean_stator, spacing_stator))
 
             # Update eta
-            new_eta_tt=self.calc_eta_tt(self.stator_loss,self.rotor_loss,self.psi_mean,self.U_mean,self.w_1,self.v_2)
+            new_eta_tt = self.calc_eta_tt(self.stator_loss, self.rotor_loss, self.psi_mean, self.U_mean, self.w_1,
+                                          self.v_2)
             difference = np.abs(new_eta_tt - self.eta_tt_estimated)
             self.eta_tt_estimated = new_eta_tt
             n_iter += 1
@@ -316,7 +335,7 @@ class Fan:
 
     def map_radius_in_to_out(self, r):
         return (r - self.r_hub_inlet_rotor) / (self.r_tip - self.r_hub_inlet_rotor) * \
-               (self.r_tip - self.r_hub_inlet_stator) + self.r_hub_inlet_stator
+            (self.r_tip - self.r_hub_inlet_stator) + self.r_hub_inlet_stator
 
     def calc_intermediate_geometry(self, x_inlet, r_hub_inlet, r_hub_outlet, c_mean_inlet, c_mean_outlet, h, c_tip,
                                    c_hub):
@@ -434,27 +453,43 @@ class Fan:
         # Calculate Mach
         Mach = v_inlet / np.sqrt(self.R_air * self.gamma * self.T_exit_rotor)
         return [alpha_2, v_inlet, alpha_1, solidity, DF, Mach]
+
     def stator_force(self):
         # Be Aware that these values are in SI units Newtons [N] kgm/s^2
         C = np.linspace(self.c_hub_stator, self.c_tip_stator, self.no_points)
-        S = (1/self.solidity_stator_distribution) * C
+        S = (1 / self.solidity_stator_distribution) * C
         dx = (self.h_blade_inlet_stator / self.no_points)
         A_t = sum(dx * S)
         mdot_s = self.mdot / A_t * (self.h_blade_inlet_stator / self.no_points) * S
         Fm = sum(S * (self.P_exit_stator - self.P_exit_rotor) * dx)
-        Ft = sum(mdot_s * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(self.alpha_2_stator_distribution)))
-        return Fm, Ft
+        Ft = sum(mdot_s * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(
+            self.alpha_2_stator_distribution)))
+        Mt = sum(mdot_s * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(
+            self.alpha_2_stator_distribution)) * self.r_stator)
+        t_root = self.t_c_stator * self.c_hub_stator
+        I_root = (self.c_hub_stator * t_root**3) / 12
+        max_stress = Mt * t_root / (2 * I_root)
+        return Fm, Ft, Mt, max_stress
+
     def rotor_force(self):
         # Be Aware that these values are in SI units Newtons [N] kgm/s^2
         C = np.linspace(self.c_hub_rotor, self.c_tip_rotor, self.no_points)
-        S = (1/self.solidity_rotor_distribution) * C
+        S = (1 / self.solidity_rotor_distribution) * C
         dx = (self.h_blade_rotor / self.no_points)
         A_t = sum(dx * S)
         mdot_s = self.mdot / A_t * (self.h_blade_rotor / self.no_points) * S
-        Fm = sum(S * (self.P_exit_rotor-self.P_inlet) * dx)
-        Ft = sum(mdot_s * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(self.beta_2_rotor_distribution)))
-        Fr = self.volume_rotor_blade() * self.titanium_blade_density * self.r_mean_rotor * (self.omega * 2 * np.pi / 60) ** 2
-        return Fm, Ft, Fr
+        Fm = sum(S * (self.P_exit_rotor - self.P_inlet) * dx)
+        Ft = sum(mdot_s * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(
+            self.beta_2_rotor_distribution)))
+        Fr = self.volume_rotor_blade() * self.titanium_blade_density * self.r_mean_rotor * (
+                    self.omega * 2 * np.pi / 60) ** 2
+        Mt = sum(mdot_s * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(
+            self.beta_2_rotor_distribution)) * self.r_rotor)
+        t_root = self.t_c_rotor * self.c_hub_rotor
+        A_root = t_root * self.c_hub_rotor
+        I_root = (self.c_hub_rotor * t_root ** 3) / 12
+        max_stress = Mt * t_root / (2 * I_root) + Fr / A_root
+        return Fm, Ft, Fr, Mt, max_stress
 
     def size_stator_thicknes(self):
         ...
@@ -474,11 +509,11 @@ class Fan:
         Re_rotor = (rho * w1 * chord_rotor) / dynamic_viscosity
         Re_stator = (rho * v2 * chord_stator) / dynamic_viscosity
         Deq_rotor = (np.cos(beta_2) / np.cos(beta_1)) * (
-                    1.12 + 0.61 * ((np.cos(beta_1)) ** 2 / solidity_rotor) * (np.tan(beta_2) - np.tan(beta_1)))
+                1.12 + 0.61 * ((np.cos(beta_1)) ** 2 / solidity_rotor) * (np.tan(beta_2) - np.tan(beta_1)))
         momentum_thickness_rotor = (0.0045 / (1 - 0.95 * np.log(Deq_rotor)))
         M_rotor = (momentum_thickness_rotor) * (solidity_rotor / (np.cos(beta_2)))
         Deq_stator = (np.cos(alpha_3) / np.cos(alpha_2)) * (
-                    1.12 + 0.61 * ((np.cos(alpha_2)) ** 2 / solidity_stator) * (np.tan(alpha_3) - np.tan(alpha_2)))
+                1.12 + 0.61 * ((np.cos(alpha_2)) ** 2 / solidity_stator) * (np.tan(alpha_3) - np.tan(alpha_2)))
         momentum_thickness_stator = (0.0045 / (1 - 0.95 * np.log(Deq_stator)))
         M_stator = (momentum_thickness_stator) * (solidity_stator / (np.cos(alpha_3)))
         displacement_thickness_rotor = 0.046 * (1 + 0.8 * mach_rotor ** 2) ** 0.44 * Re_rotor ** (-0.2)
@@ -488,11 +523,11 @@ class Fan:
         alpha_m_rotor = np.arctan(np.tan(beta_2) * ((1 - D_rotor - M_rotor)) / (1 - D_rotor) ** 2)
         alpha_m_stator = np.arctan(np.tan(alpha_3) * ((1 - D_stator - M_stator)) / (1 - D_stator) ** 2)
         dn_rotor = (theta ** 2 / psi) * ((M_rotor - 1 + D_rotor + (1 - D_rotor) ** 2) * (1 - D_rotor) + 0.5 * (
-                    ((1 - D_rotor - K_rotor) / (np.cos(beta_2) ** 2)) -
-                    ((1 - D_rotor) ** 3) / (np.cos(alpha_m_rotor) ** 2)))
+                ((1 - D_rotor - K_rotor) / (np.cos(beta_2) ** 2)) -
+                ((1 - D_rotor) ** 3) / (np.cos(alpha_m_rotor) ** 2)))
         dn_stator = (theta ** 2 / psi) * ((M_stator - 1 + D_stator + (1 - D_stator) ** 2) * (1 - D_stator) + 0.5 * (
-                    ((1 - D_stator - K_stator) / (np.cos(alpha_3) ** 2)) -
-                    ((1 - D_stator) ** 3) / (np.cos(alpha_m_stator) ** 2)))
+                ((1 - D_stator - K_stator) / (np.cos(alpha_3) ** 2)) -
+                ((1 - D_stator) ** 3) / (np.cos(alpha_m_stator) ** 2)))
         return [dn_rotor, dn_stator]
 
     def calc_BL_loss(self, DF_stator, DF_rotor, solidity_stator, solidity_rotor, beta_1, alpha_2, theta, psi, beta_2,
@@ -501,147 +536,156 @@ class Fan:
         Cs_c_stator = (0.5 * (alpha_2 - alpha_3)) / (np.sin(0.5 * (alpha_2 - alpha_3)))
         bl_thickness_c_rotor = 0.0804 * DF_rotor ** 2 - 0.0272 * DF_rotor + 0.0071
         bl_thickness_c_stator = 0.0804 * DF_stator ** 2 - 0.0272 * DF_stator + 0.0071
-        dn_rotor = 0.5 * solidity_rotor * Cs_c_rotor * (1 / np.cos(beta_2)) ** 3 * bl_thickness_c_rotor * (1 / Cs_c_rotor) * (
-                    theta ** 2 / psi)
+        dn_rotor = 0.5 * solidity_rotor * Cs_c_rotor * (1 / np.cos(beta_2)) ** 3 * bl_thickness_c_rotor * (
+                    1 / Cs_c_rotor) * (
+                           theta ** 2 / psi)
         dn_stator = 0.5 * solidity_stator * Cs_c_stator * (1 / np.cos(alpha_3)) ** 3 * bl_thickness_c_stator * (
-                    1 / Cs_c_stator) * (theta ** 2 / psi)
+                1 / Cs_c_stator) * (theta ** 2 / psi)
         return [dn_rotor, dn_stator]
 
-    def calc_endwall_loss(self,Cd,alpha_1,alpha_2,gamma,spacing,chord,rho,w1,dynamic_viscosity,solidity,mach):
-        c2=0.5*((np.tan(alpha_2)/np.cos(alpha_2))-(np.tan(alpha_1)/np.cos(alpha_1))+np.log((np.tan(alpha_2)+(1/np.cos(alpha_2)))/(np.tan(alpha_1)+(1/np.cos(alpha_1)))))
-        c1=(1/4)*((np.tan(alpha_2)/np.cos(alpha_2)**3)-(np.tan(alpha_1)/np.cos(alpha_1)**3)+3*c2)
-        Re=(rho*w1*chord)/dynamic_viscosity
-        Deq=(np.cos(alpha_2)/np.cos(alpha_1))*(1.12+0.61*((np.cos(alpha_1))**2/solidity)*(np.tan(alpha_2)-np.tan(alpha_1)))
-        momentum_thickness=(0.0045/(1-0.95*np.log(Deq)))
-        M=(momentum_thickness)*(solidity/(np.cos(alpha_2)))
-        displacement_thickness=0.046*(1+0.8*mach**2)**0.44*Re**(-0.2)
-        D=(displacement_thickness)*(solidity/(np.cos(alpha_2)))
-        alpha_m=np.arctan(np.tan(abs(alpha_2))*((1-D-M))/(1-D)**2)
-        staggerangle=np.arctan(np.tan(alpha_m)-0.213)
-        endwall_loss=(4*Cd**2*alpha_2*np.cos(staggerangle))/(alpha_2-np.tan(alpha_1))*(chord/spacing)*(4/3)*c1
+    def calc_endwall_loss(self, Cd, alpha_1, alpha_2, gamma, spacing, chord, rho, w1, dynamic_viscosity, solidity,
+                          mach):
+        c2 = 0.5 * ((np.tan(alpha_2) / np.cos(alpha_2)) - (np.tan(alpha_1) / np.cos(alpha_1)) + np.log(
+            (np.tan(alpha_2) + (1 / np.cos(alpha_2))) / (np.tan(alpha_1) + (1 / np.cos(alpha_1)))))
+        c1 = (1 / 4) * ((np.tan(alpha_2) / np.cos(alpha_2) ** 3) - (np.tan(alpha_1) / np.cos(alpha_1) ** 3) + 3 * c2)
+        Re = (rho * w1 * chord) / dynamic_viscosity
+        Deq = (np.cos(alpha_2) / np.cos(alpha_1)) * (
+                    1.12 + 0.61 * ((np.cos(alpha_1)) ** 2 / solidity) * (np.tan(alpha_2) - np.tan(alpha_1)))
+        momentum_thickness = (0.0045 / (1 - 0.95 * np.log(Deq)))
+        M = (momentum_thickness) * (solidity / (np.cos(alpha_2)))
+        displacement_thickness = 0.046 * (1 + 0.8 * mach ** 2) ** 0.44 * Re ** (-0.2)
+        D = (displacement_thickness) * (solidity / (np.cos(alpha_2)))
+        alpha_m = np.arctan(np.tan(abs(alpha_2)) * ((1 - D - M)) / (1 - D) ** 2)
+        staggerangle = np.arctan(np.tan(alpha_m) - 0.213)
+        endwall_loss = (4 * Cd ** 2 * alpha_2 * np.cos(staggerangle)) / (alpha_2 - np.tan(alpha_1)) * (
+                    chord / spacing) * (4 / 3) * c1
         return endwall_loss
 
-    def calc_tip_leakage_loss(self,h_blade_rotor,solidity_rotor,beta_1,theta,psi,beta_2,
-                         rho,dynamic_viscosity,w1,chord_rotor,mach_rotor):
-        Cs_c_rotor=(0.5*(beta_1-beta_2))/(np.sin(0.5*(beta_1-beta_2)))
-        Re_rotor=(rho*w1*chord_rotor)/dynamic_viscosity
-        Deq_rotor=(np.cos(beta_2)/np.cos(beta_1))*(1.12+0.61*((np.cos(beta_1))**2/solidity_rotor)*(np.tan(beta_2)-np.tan(beta_1)))
-        momentum_thickness_rotor=(0.0045/(1-0.95*np.log(Deq_rotor)))
-        M_rotor=(momentum_thickness_rotor)*(solidity_rotor/(np.cos(beta_2)))
-        displacement_thickness_rotor=0.046*(1+0.8*mach_rotor**2)**0.44*Re_rotor**(-0.2)
-        D_rotor=(displacement_thickness_rotor)*(solidity_rotor/(np.cos(beta_2)))
-        alpha_m_rotor=np.arctan(np.tan(abs(beta_2))*((1-D_rotor-M_rotor))/(1-D_rotor)**2)
-        staggerangle_rotor=np.arctan(np.tan(alpha_m_rotor)-0.213)
-        
-        Cd=0.002
-        dn=Cd*(0.01)*Cs_c_rotor*(2*theta*np.sqrt(psi)*(psi*np.cos(staggerangle_rotor)+2*theta*solidity_rotor))/(
-            2*theta*solidity_rotor*np.cos(staggerangle_rotor))**(3/2)
+    def calc_tip_leakage_loss(self, h_blade_rotor, solidity_rotor, beta_1, theta, psi, beta_2,
+                              rho, dynamic_viscosity, w1, chord_rotor, mach_rotor):
+        Cs_c_rotor = (0.5 * (beta_1 - beta_2)) / (np.sin(0.5 * (beta_1 - beta_2)))
+        Re_rotor = (rho * w1 * chord_rotor) / dynamic_viscosity
+        Deq_rotor = (np.cos(beta_2) / np.cos(beta_1)) * (
+                    1.12 + 0.61 * ((np.cos(beta_1)) ** 2 / solidity_rotor) * (np.tan(beta_2) - np.tan(beta_1)))
+        momentum_thickness_rotor = (0.0045 / (1 - 0.95 * np.log(Deq_rotor)))
+        M_rotor = (momentum_thickness_rotor) * (solidity_rotor / (np.cos(beta_2)))
+        displacement_thickness_rotor = 0.046 * (1 + 0.8 * mach_rotor ** 2) ** 0.44 * Re_rotor ** (-0.2)
+        D_rotor = (displacement_thickness_rotor) * (solidity_rotor / (np.cos(beta_2)))
+        alpha_m_rotor = np.arctan(np.tan(abs(beta_2)) * ((1 - D_rotor - M_rotor)) / (1 - D_rotor) ** 2)
+        staggerangle_rotor = np.arctan(np.tan(alpha_m_rotor) - 0.213)
+
+        Cd = 0.002
+        dn = Cd * (0.01) * Cs_c_rotor * (
+                    2 * theta * np.sqrt(psi) * (psi * np.cos(staggerangle_rotor) + 2 * theta * solidity_rotor)) / (
+                     2 * theta * solidity_rotor * np.cos(staggerangle_rotor)) ** (3 / 2)
         return dn
 
-    def calc_eta_tt(self,stator_loss,rotor_loss,psi,U,w_1,v_2):
-        eta_tt=1-(1/(2*psi))*((stator_loss*v_2**2)+(rotor_loss*w_1**2))/U**2
+    def calc_eta_tt(self, stator_loss, rotor_loss, psi, U, w_1, v_2):
+        eta_tt = 1 - (1 / (2 * psi)) * ((stator_loss * v_2 ** 2) + (rotor_loss * w_1 ** 2)) / U ** 2
 
         return eta_tt
 
-
-    #diff loss method:
-    def calc_stator_loss(self,Cd,alpha_2,alpha_3,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,v2,chord_stator,spacing):
-        dynamic_viscosity=self.calc_dyn_visc(T_1)
-        BL_loss=Cd*(2*np.sqrt(3)+6/np.sqrt(3))*abs(np.tan(alpha_3)-np.tan(alpha_2))
+    # diff loss method:
+    def calc_stator_loss(self, Cd, alpha_2, alpha_3, mach_1, gamma, R_air, T_1, chamber_angle, t_s, Cpb, rho, v2,
+                         chord_stator, spacing):
+        dynamic_viscosity = self.calc_dyn_visc(T_1)
+        BL_loss = Cd * (2 * np.sqrt(3) + 6 / np.sqrt(3)) * abs(np.tan(alpha_3) - np.tan(alpha_2))
 
         if mach_1 > 1:
-            shock_loss=(4/(3*mach_1**2*(gamma+1)**2))*(mach_1**2-1)**3
+            shock_loss = (4 / (3 * mach_1 ** 2 * (gamma + 1) ** 2)) * (mach_1 ** 2 - 1) ** 3
         else:
-            shock_loss=0
+            shock_loss = 0
 
-        #Mixing losses
+        # Mixing losses
         Re_stator = (rho * v2 * chord_stator) / dynamic_viscosity
-        t=t_s*spacing
-        displacement_thickness_stator=0.046*(1+0.8*mach_1**2)**0.44*Re_stator**(-0.2)*chord_stator
-        #mixing_loss=((2*chamber_angle)/spacing)+((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
-        mixing_loss=((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
+        t = t_s * spacing
+        displacement_thickness_stator = 0.046 * (1 + 0.8 * mach_1 ** 2) ** 0.44 * Re_stator ** (-0.2) * chord_stator
+        # mixing_loss=((2*chamber_angle)/spacing)+((displacement_thickness_stator+t)/spacing)**2-(Cpb*t_s)
+        mixing_loss = ((displacement_thickness_stator + t) / spacing) ** 2 - (Cpb * t_s)
 
-        endwall_loss=self.calc_endwall_loss(Cd,alpha_2,alpha_3,gamma,spacing,chord_stator,rho,v2,dynamic_viscosity,chord_stator/spacing,mach_1)
+        endwall_loss = self.calc_endwall_loss(Cd, alpha_2, alpha_3, gamma, spacing, chord_stator, rho, v2,
+                                              dynamic_viscosity, chord_stator / spacing, mach_1)
 
-        return BL_loss, shock_loss, mixing_loss,endwall_loss
+        return BL_loss, shock_loss, mixing_loss, endwall_loss
 
-
-    def calc_rotor_loss(self,Cd,beta_1,beta_2,mach_1,gamma,R_air,T_1,chamber_angle,t_s,Cpb,rho,w1,chord_rotor,spacing):
-        dynamic_viscosity=self.calc_dyn_visc(T_1)
-        BL_loss=Cd*(2*np.sqrt(3)+6/np.sqrt(3))*abs(np.tan(beta_2)-np.tan(beta_1))
+    def calc_rotor_loss(self, Cd, beta_1, beta_2, mach_1, gamma, R_air, T_1, chamber_angle, t_s, Cpb, rho, w1,
+                        chord_rotor, spacing):
+        dynamic_viscosity = self.calc_dyn_visc(T_1)
+        BL_loss = Cd * (2 * np.sqrt(3) + 6 / np.sqrt(3)) * abs(np.tan(beta_2) - np.tan(beta_1))
         if mach_1 > 1:
-            shock_loss=(4/(3*mach_1**2*(gamma+1)**2))*(mach_1**2-1)**3
+            shock_loss = (4 / (3 * mach_1 ** 2 * (gamma + 1) ** 2)) * (mach_1 ** 2 - 1) ** 3
         else:
-            shock_loss=0
+            shock_loss = 0
 
-        #Wake mixing loss
+        # Wake mixing loss
         Re_rotor = (rho * w1 * chord_rotor) / dynamic_viscosity
-        t=t_s*spacing
-        displacement_thickness_rotor=0.046*(1+0.8*mach_1**2)**0.44*Re_rotor**(-0.2)*chord_rotor
-        #mixing_loss=((2*chamber_angle)/spacing)+((displacement_thickness_rotor+t)/spacing)**2-(Cpb*t_s)
-        mixing_loss=((displacement_thickness_rotor+t)/spacing)**2-(Cpb*t_s)
+        t = t_s * spacing
+        displacement_thickness_rotor = 0.046 * (1 + 0.8 * mach_1 ** 2) ** 0.44 * Re_rotor ** (-0.2) * chord_rotor
+        # mixing_loss=((2*chamber_angle)/spacing)+((displacement_thickness_rotor+t)/spacing)**2-(Cpb*t_s)
+        mixing_loss = ((displacement_thickness_rotor + t) / spacing) ** 2 - (Cpb * t_s)
 
-        #tip loss
-        tip_loss=(2*Cd*0.01*chord_rotor)/(spacing*np.cos(abs(beta_1)))
+        # tip loss
+        tip_loss = (2 * Cd * 0.01 * chord_rotor) / (spacing * np.cos(abs(beta_1)))
 
-        #endwall_loss
-        endwall_loss=self.calc_endwall_loss(Cd,beta_1,beta_2,gamma,spacing,chord_rotor,rho,w1,dynamic_viscosity,chord_rotor/spacing,mach_1)
+        # endwall_loss
+        endwall_loss = self.calc_endwall_loss(Cd, beta_1, beta_2, gamma, spacing, chord_rotor, rho, w1,
+                                              dynamic_viscosity, chord_rotor / spacing, mach_1)
 
+        return BL_loss, shock_loss, mixing_loss, tip_loss, endwall_loss
 
-        return BL_loss, shock_loss, mixing_loss,tip_loss,endwall_loss
-
-    def calc_stall_margin(self, mach_rel_out, mach_rel_in,t_s, beta, beta_blade):
+    def calc_stall_margin(self, mach_rel_out, mach_rel_in, t_s, beta, beta_blade):
 
         # require M_rel, Beta_1, T1, P1
 
         # This function uses control volume method based off of C.Freeman's paper
         lhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_out ** 2)) ** (- 1 / 2)) * \
-          (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_th)) / (mach_rel_out * (1 - t_th))
+              (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_th)) / (mach_rel_out * (1 - t_th))
         rhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_in ** 2)) ** (- 1 / 2)) * \
-          (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
+              (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(
+                  beta - beta_blade)) / mach_rel_in
         residual = lhs - rhs
         return residual
 
-    def calc_dyn_visc(self,T):
-        mu_0=1.716E-5
-        T_0=273
-        S_mu=111
-        mu=mu_0*((T/T_0)**(3/2))*((T_0+S_mu)/(T+S_mu))
+    def calc_dyn_visc(self, T):
+        mu_0 = 1.716E-5
+        T_0 = 273
+        S_mu = 111
+        mu = mu_0 * ((T / T_0) ** (3 / 2)) * ((T_0 + S_mu) / (T + S_mu))
         return mu
 
     def volume(self):
-        volume_rotor = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * self.no_blades_rotor * \
-                 (self.c_hub_rotor + self.c_tip_rotor) / 2 * np.max(self.t_c_rotor)
-        volume_stator = 0.5 * (self.c_hub_stator + self.c_tip_stator) * (self.h_blade_inlet_stator + self.h_blade_outlet_stator) / 2 * self.no_blades_stator * \
-                 (self.c_hub_stator + self.c_tip_stator) / 2 * np.max(self.t_c_stator)
+        volume_rotor = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (
+                    self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * self.no_blades_rotor * \
+                       (self.c_hub_rotor + self.c_tip_rotor) / 2 * np.max(self.t_c_rotor)
+        volume_stator = 0.5 * (self.c_hub_stator + self.c_tip_stator) * (
+                    self.h_blade_inlet_stator + self.h_blade_outlet_stator) / 2 * self.no_blades_stator * \
+                        (self.c_hub_stator + self.c_tip_stator) / 2 * np.max(self.t_c_stator)
         machine_volume = volume_stator + volume_rotor
         return machine_volume
 
     def volume_rotor_blade(self):
         volume = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * \
-                       (self.c_hub_rotor + self.c_tip_rotor) / 2 * np.max(self.t_c_rotor)
+                 (self.c_hub_rotor + self.c_tip_rotor) / 2 * np.max(self.t_c_rotor)
         return volume
-
-
 
 
 class Fan_Plots:
     def __init__(self, Fan):
         self.Fan = Fan
-        #self.plot_thermodynamic_properties()
+        # self.plot_thermodynamic_properties()
         self.plot_meridional_shape()
-        #self.plot_distribution_at_blade()
-        #self.plot_velocity_triangle(beta_1=self.Fan.beta_1, beta_2=self.Fan.beta_2, alpha_2=self.Fan.alpha_2,
-                                    #U=self.Fan.U_mean, location="meanline")
-        #self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[0],
-                                    #beta_2=self.Fan.beta_2_rotor_distribution[0],
-                                    #alpha_2=self.Fan.alpha_2_rotor_distribution[0],
-                                   # U=self.Fan.U_rotor_distribution[0], location="hub")
-        #self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[-1],
-                                    #beta_2=self.Fan.beta_2_rotor_distribution[-1],
-                                    #alpha_2=self.Fan.alpha_2_rotor_distribution[-1],
-                                    #U=self.Fan.U_rotor_distribution[-1], location="tip")
-        #self.print_data()
+        # self.plot_distribution_at_blade()
+        # self.plot_velocity_triangle(beta_1=self.Fan.beta_1, beta_2=self.Fan.beta_2, alpha_2=self.Fan.alpha_2,
+        # U=self.Fan.U_mean, location="meanline")
+        # self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[0],
+        # beta_2=self.Fan.beta_2_rotor_distribution[0],
+        # alpha_2=self.Fan.alpha_2_rotor_distribution[0],
+        # U=self.Fan.U_rotor_distribution[0], location="hub")
+        # self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[-1],
+        # beta_2=self.Fan.beta_2_rotor_distribution[-1],
+        # alpha_2=self.Fan.alpha_2_rotor_distribution[-1],
+        # U=self.Fan.U_rotor_distribution[-1], location="tip")
+        # self.print_data()
 
     def plot_thermodynamic_properties(self):
         fig, ax1 = plt.subplots()
@@ -852,7 +896,7 @@ def compare_interps(interp_ref, interp_new, points, title: str):
     y = points[:, 1]
     ref_vals = interp_ref(x, y)
     new_vals = interp_new(x, y, grid=False)
-    rel_diff = (new_vals - ref_vals)/ref_vals
+    rel_diff = (new_vals - ref_vals) / ref_vals
     plt.scatter(x, rel_diff)
     plt.grid()
     plt.title(title)
@@ -899,13 +943,14 @@ class Lieblein_Model:
 
         # Interpolate delta
         points, values, betas, solidity = self.get_data_for_2Dinterpolation([("sigma0_solidity-0_4.csv", 0.4),
-                                                            ("sigma0_solidity-0_8.csv", 0.8),
-                                                            ("sigma0_solidity-1.csv", 1),
-                                                            ("sigma0_solidity-1.2.csv", 1.2),
-                                                            ("sigma0_solidity-1_4.csv", 1.4),
-                                                            ("sigma0_solidity-1_6.csv", 1.6),
-                                                            ("sigma0_solidity-1_8.csv", 1.8),
-                                                            ("sigma0_solidity-2.csv", 2)], graph="delta")
+                                                                             ("sigma0_solidity-0_8.csv", 0.8),
+                                                                             ("sigma0_solidity-1.csv", 1),
+                                                                             ("sigma0_solidity-1.2.csv", 1.2),
+                                                                             ("sigma0_solidity-1_4.csv", 1.4),
+                                                                             ("sigma0_solidity-1_6.csv", 1.6),
+                                                                             ("sigma0_solidity-1_8.csv", 1.8),
+                                                                             ("sigma0_solidity-2.csv", 2)],
+                                                                            graph="delta")
         self.calc_delta0 = fix_extrapolation_spline(betas, solidity,
                                                     intrp.LinearNDInterpolator(points=points, values=values))
         # compare_interps(intrp.LinearNDInterpolator(points=points, values=values), self.calc_delta0, points, "delta0")
