@@ -3,28 +3,34 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
 from pymoo.core.problem import ElementwiseProblem
+from pymoo.core.variable import Real, Integer
 
 class optimize_design_elementwise(ElementwiseProblem):
-    def __init__(self):
+    def __init__(self, **kwargs):
         vars = {
-            "M_inlet": Binary(),
-            "x": Choice(options=["nothing", "multiply"]),
-            "y": Integer(bounds=(-2, 2)),
-            "z": Real(bounds=(-5, 5)),
+            "M_inlet": Real(bounds=(0.55,0.7)),
+            "AR_rotor": Real(bounds=(2,5)),
+            "AR_stator": Real(bounds=(3, 5)),
+            "taper_rotor": Real(bounds=(0.5, 1.0)),
+            "taper_stator": Real(bounds=(0.5, 1.5)),
+            "n": Real(bounds=(0.2, 1.0)),
+            "N_R": Integer(bounds=(20, 50)),
+            "N_S": Integer(bounds=(20, 50)),
+            "hub_tip_ratio": Real(bounds=(0.2, 0.7)),
+        }
 
-        super().__init__(n_var=9,
+        super().__init__(vars=vars,
                          n_obj=3,
-                         n_ieq_constr=8,
-                         xl=np.array([0.55, 2, 3, 0.5, 0.5, 0.2, 25, 25, 0.2]),
-                         xu=np.array([0.7, 5, 5, 1.0, 1.5, 2.0, 50, 50, 0.5]))
+                         n_ieq_constr=7,
+                         **kwargs)
 
-    def _evaluate(self, x, out, *args, **kwargs):
+    def _evaluate(self, X, out, *args, **kwargs):
         # input_vector = [Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, N_R, N_S, hub_tip_ratio]
 
-        design = Fan(Mach_inlet=x[0], AR_rotor=x[1], AR_stator=x[2], taper_rotor=x[3], taper_stator=x[4], n=x[5], no_blades_rotor=x[6],
-             no_blades_stator=x[7], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=x[8],
+        design = Fan(Mach_inlet=X["M_inlet"], AR_rotor=X["AR_rotor"], AR_stator=X["AR_stator"], taper_rotor=X["taper_rotor"], taper_stator=X["taper_stator"], n=X["n"], no_blades_rotor=X["N_R"],
+             no_blades_stator=X["N_S"], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=X["hub_tip_ratio"],
              gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model(),
-             profile="DCA", methodology='controlled vortex')
+             profile="NACA-65", methodology='controlled vortex')
 
         # Objective functions
         obj1 = 1 - design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated) / Maximise eta_tt_estimated
@@ -32,8 +38,8 @@ class optimize_design_elementwise(ElementwiseProblem):
         obj3 = design.volume_value * design.titanium_blade_density  # Minimise weight
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = max(design.delta_rotor) - 10
-        const2 = max(design.delta_stator) - 10
+        const1 = max(design.delta_rotor) - 8
+        const2 = max(design.delta_stator) - 8
         const3 = max(design.Mach_rotor) - 1.4
         const4 = max(design.solidity_rotor_distribution) - 1.5
         const5 = max(design.solidity_stator_distribution) - 1.5
@@ -220,7 +226,7 @@ class Fan:
             # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
 
             # For the sake of testing assume constant tc
-            self.t_c_rotor = np.ones(self.no_points) * 0.06
+            self.t_c_rotor = np.ones(self.no_points) * 0.10
             self.t_c_stator = np.ones(self.no_points) * 0.10
 
             # For the sake of testing calculate ts ratio
@@ -430,15 +436,25 @@ class Fan:
         return [alpha_2, v_inlet, alpha_1, solidity, DF, Mach]
     def stator_force(self):
         # Be Aware that these values are in SI units Newtons [N] kgm/s^2
-        Fm = self.solidity_stator_distribution * (self.P_exit_stator - self.P_exit_rotor)
-        Ft = self.mdot * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(self.alpha_2_stator_distribution))
+        C = np.linspace(self.c_hub_stator, self.c_tip_stator, self.no_points)
+        S = (1/self.solidity_stator_distribution) * C
+        dx = (self.h_blade_inlet_stator / self.no_points)
+        A_t = sum(dx * S)
+        mdot_s = self.mdot / A_t * (self.h_blade_inlet_stator / self.no_points) * S
+        Fm = sum(S * (self.P_exit_stator - self.P_exit_rotor) * dx)
+        Ft = sum(mdot_s * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(self.alpha_2_stator_distribution)))
         return Fm, Ft
     def rotor_force(self):
         # Be Aware that these values are in SI units Newtons [N] kgm/s^2
-        Fm = (1/self.solidity_rotor_distribution) * (self.P_exit_rotor-self.P_inlet)
-        Ft = self.mdot * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(self.beta_2_rotor_distribution))
-        Fr = 0
-        return Fm, Ft
+        C = np.linspace(self.c_hub_rotor, self.c_tip_rotor, self.no_points)
+        S = (1/self.solidity_rotor_distribution) * C
+        dx = (self.h_blade_rotor / self.no_points)
+        A_t = sum(dx * S)
+        mdot_s = self.mdot / A_t * (self.h_blade_rotor / self.no_points) * S
+        Fm = sum(S * (self.P_exit_rotor-self.P_inlet) * dx)
+        Ft = sum(mdot_s * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(self.beta_2_rotor_distribution)))
+        Fr = self.volume_rotor_blade() * self.titanium_blade_density * self.r_mean_rotor * (self.omega * 2 * np.pi / 60) ** 2
+        return Fm, Ft, Fr
 
     def size_stator_thicknes(self):
         ...
@@ -600,6 +616,13 @@ class Fan:
                  (self.c_hub_stator + self.c_tip_stator) / 2 * np.max(self.t_c_stator)
         machine_volume = volume_stator + volume_rotor
         return machine_volume
+
+    def volume_rotor_blade(self):
+        volume = 0.5 * (self.c_hub_rotor + self.c_tip_rotor) * (self.h_blade_rotor + self.h_blade_inlet_stator) / 2 * \
+                       (self.c_hub_rotor + self.c_tip_rotor) / 2 * np.max(self.t_c_rotor)
+        return volume
+
+
 
 
 class Fan_Plots:
