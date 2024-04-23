@@ -93,7 +93,7 @@ class Coordinates:
         plt.title('% of displacement in that direction: ' + str(level))
         plt.axis('equal')
 
-        plt.show()
+        # plt.show()
 
     def plot_grid_process(self,normal,level):
         # Plots the outer bound of the grid in a plane perpendicular to 'normal' (i,I,j,J,k,K) at a level normal = l [0,1]

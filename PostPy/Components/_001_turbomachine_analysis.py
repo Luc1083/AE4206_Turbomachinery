@@ -1,7 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from Components._002_blade_row import BladeRow
-from Components.full_machine_plotter import PlotMachine
+from ._002_blade_row import BladeRow
+from .full_machine_plotter import PlotMachine
 
 
 class Turbomachine:
