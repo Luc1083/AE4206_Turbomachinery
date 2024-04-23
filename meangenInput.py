@@ -70,7 +70,7 @@ class MeangenCompressorInput:
             # set our own row/stage gaps or use defaults
             # NOTE: I don't know if we compute this as of right now
             if self.force_axial_gaps:
-                temp.write(f"{self.fan.spacing_rows :.5} 0.5\n")
+                temp.write(f"{self.fan.row_chord_spacing_ratio} 0.5\n")
             else:
                 temp.write("       0.14       0.500\n")
 
@@ -205,7 +205,7 @@ class RunCFD:
         input("pause")
         self.run_stagen()
         self.run_multall()
-        self.post_process()
+        #self.post_process()
 
     def generate_stagen_input(self):
         force_vals = [i for i in self.meangen_inp.__dict__ if "force" in i]
@@ -262,21 +262,21 @@ class RunCFD:
 
 
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=3, AR_stator=3, taper_rotor=0.7, taper_stator=0.7, n=0.8, no_blades_rotor=30,
-               no_blades_stator=30, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-               hub_tip_ratio=0.3, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.44214618 , AR_stator= 3.00467911, taper_rotor= 0.99972322, taper_stator= 0.67692271, n=  0.2035397 , no_blades_rotor=   38,
+             no_blades_stator= 40, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+             hub_tip_ratio= 0.2, gamma=1.4, R_air=287, eta_tt_estimated=0.9,  row_chord_spacing_ratio=1,
                lieblein_model=ml.Lieblein_Model(),
                profile="NACA-65", methodology="controlled vortex")
     cfd = RunCFD(f, "run")
-    cfd.meangen_inp.force_deviation = False
+    #cfd.meangen_inp.force_deviation = False
     cfd.run_all()
 
     usr = str(input("Type 'Y' to post-process:\n"))
     if usr in "yY":
         tm = PP.Turbomachine()
         tm.plot.convergence_history()
-        tm.plot.variable_B2B("M_rel")
-        tm.plot.variable_B2B("P")
+        tm.plot.variable_B2B("M_rel", 0.5, 10)
+        tm.plot.variable_B2B("P", 0.5, 10)
 
         usr = str(input("Type 'Y' to make Paraview files:\n"))
         if usr in "yY":
