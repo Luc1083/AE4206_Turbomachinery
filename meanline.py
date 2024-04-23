@@ -584,7 +584,7 @@ class Fan:
 
         # This function uses control volume method based off of C.Freeman's paper
         lhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_out ** 2)) ** (- 1 / 2)) * \
-          (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_s)) / (mach_rel_out * (1 - t_s))
+          (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_th)) / (mach_rel_out * (1 - t_th))
         rhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_in ** 2)) ** (- 1 / 2)) * \
           (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
         residual = lhs - rhs
