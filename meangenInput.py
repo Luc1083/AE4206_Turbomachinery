@@ -6,6 +6,7 @@ import subprocess
 import meanline as ml
 import numpy as np
 import PostPy.Components as PP
+import scipy.interpolate as intrp
 
 
 def angle_between_vectors(v1, v2=np.array([1, 0])):
@@ -14,7 +15,7 @@ def angle_between_vectors(v1, v2=np.array([1, 0])):
 
 class MeangenCompressorInput:
     def __init__(self, fan: ml.Fan, force_axial_chords: bool = True, force_axial_gaps: bool = True,
-                 force_blockage_factors: bool = False, force_deviation: bool = True, force_eta: bool = True,
+                 force_blockage_factors: bool = True, force_deviation: bool = True, force_eta: bool = True,
                  force_incidence: bool = True, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
                  force_q0: bool = True, exec_extension=""):
         """
@@ -77,7 +78,28 @@ class MeangenCompressorInput:
             # set our own blockage factors or use defaults. Factors provided at LE of row 1, and TE of row 2.
             # NOTE: couldn't find it
             if self.force_blockage_factors:
-                raise NotImplementedError("couldn't find it lol")
+                # bf = 1 - (eff_flow area / geometric flow area)
+                # eff = geo - momentum_thicc
+                # geo = annulus - bladeThickness
+                raw = np.genfromtxt("mt_interp.txt")
+                a = intrp.interp1d(x=raw[:, 0], y=raw[:, 1], fill_value="extrapolate")
+                mom_thick_rot = a(self.fan.DF_rotor_distribution[self.fan.rotor_mean_idx])\
+                            * self.fan.c_mean_rotor * self.fan.no_blades_rotor
+
+                geo_flow_area_rot = (self.fan.r_tip ** 2 - self.fan.r_hub_inlet_rotor ** 2) * np.pi - \
+                                (self.fan.r_tip - self.fan.r_hub_inlet_rotor) * self.fan.no_blades_rotor \
+                                * self.fan.t_c_rotor[self.fan.rotor_mean_idx] * self.fan.c_mean_rotor
+                bf_rot = 1 - (geo_flow_area_rot - mom_thick_rot)
+
+                mom_thick_stat = a(self.fan.DF_stator_distribution[self.fan.stator_mean_idx]) * self.fan.c_mean_stator * self.fan.no_blades_stator
+
+                geo_flow_area_stat = (self.fan.r_tip ** 2 - self.fan.r_hub_inlet_stator ** 2) * np.pi - (self.fan.r_tip - self.fan.r_hub_inlet_stator) \
+                                     * self.fan.no_blades_stator * self.fan.t_c_stator[self.fan.stator_mean_idx] * self.fan.c_mean_stator
+                bf_stat = 1 - (geo_flow_area_stat - mom_thick_stat)
+                print(bf_rot, bf_stat)
+                exit()
+                temp.write(f"{bf_rot :.5f} {bf_stat :.5f} \n")
+
 
             else:
                 temp.write("   0.00000   0.00000     \n")
@@ -202,10 +224,9 @@ class RunCFD:
 
     def run_all(self):
         self.generate_stagen_input()
-        input("pause")
+        input()
         self.run_stagen()
         self.run_multall()
-        self.post_process()
 
     def generate_stagen_input(self):
         force_vals = [i for i in self.meangen_inp.__dict__ if "force" in i]
@@ -260,15 +281,14 @@ class RunCFD:
                 file.write(line)
 
 
-
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=3, AR_stator=3, taper_rotor=0.7, taper_stator=0.7, n=0.8, no_blades_rotor=30,
-               no_blades_stator=30, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-               hub_tip_ratio=0.3, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.80630558e+00, AR_stator=3.19673306e+00, taper_rotor=1.05025995e+00,
+               taper_stator=1.18320802e+00, n=9.05646605e-01, no_blades_rotor=23,
+               no_blades_stator=25, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+               hub_tip_ratio=3.99206152e-01, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
                lieblein_model=ml.Lieblein_Model(),
                profile="NACA-65", methodology="controlled vortex")
     cfd = RunCFD(f, "run")
-    cfd.meangen_inp.force_deviation = False
     cfd.run_all()
 
     usr = str(input("Type 'Y' to post-process:\n"))
@@ -281,12 +301,10 @@ if __name__ == "__main__":
         usr = str(input("Type 'Y' to make Paraview files:\n"))
         if usr in "yY":
             usr = float(input("Enter a fraction of the rotor and stator circumference to show:\n"))
-            if 0.0 <usr < 1.0:
+            if 0.0 < usr < 1.0:
                 raise ValueError(f"Wrong input: {usr} is not a fraction between 0 and 1")
-            nrot = int(cfd.fan.no_blades_rotor*usr)
-            nstat = int(cfd.fan.no_blades_stator*usr)
+            nrot = int(cfd.fan.no_blades_rotor * usr)
+            nstat = int(cfd.fan.no_blades_stator * usr)
             tm.rows[0].N_instances = nrot
             tm.rows[1].N_instances = nrot
             tm.gen_ParaView_input()
-
-
