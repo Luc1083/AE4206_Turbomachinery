@@ -2,23 +2,15 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
-from pymoo.core.problem import Problem
+from pymoo.core.problem import ElementwiseProblem
 
-
-# Constraints:s
-
-# Optimisation Structure:
-#   1. Problem
-#   2. Algorithm
-#   3. Stop Criteria
-
-class optimize_design(Problem):
+class optimize_design_elementwise(ElementwiseProblem):
     def __init__(self):
         super().__init__(n_var=8,
                          n_obj=3,
-                         n_ieq_constr=0,
-                         xl=np.array([1, 1, 0.5, 0.5, 0.5, 10, 25, 0]),
-                         xu=np.array([5, 5, 1.5, 1.5, 2.0, 40, 100, 0.7]))
+                         n_ieq_constr=3,
+                         xl=np.array([2, 3, 0.5, 0.5, 0.2, 25, 25, 0]),
+                         xu=np.array([5, 5, 1.0, 1.5, 2.0, 40, 40, 0.5]))
 
     def _evaluate(self, x, out, *args, **kwargs):
         # input_vector = [AR_rotor, AR_stator, taper_rotor, taper_stator, n, N_R, N_S, hub_tip_ratio]
@@ -26,9 +18,9 @@ class optimize_design(Problem):
         # Fan(omega,ratio,..., x1, x2, ..., x3,.., x4)
 
         design = Fan(Mach_inlet=0.6, AR_rotor=x[0], AR_stator=x[1], taper_rotor=x[2], taper_stator=x[3], n=x[4], no_blades_rotor=x[5],
-             no_blades_stator=x[6], beta_tt=1.6, P0_cruise=39513.14, rho=0.59, dyn_visc=15.6E-6, T0_cruise=250.13, mdot=80, omega=5000,
-             hub_tip_ratio=x[7], gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model,
-             profile="NACA-65", methodology="free vortex")
+             no_blades_stator=x[6], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=x[7],
+             gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model(),
+             profile="NACA-65", methodology='controlled vortex')
 
         # Objective functions
         obj1 = design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated)
@@ -36,13 +28,15 @@ class optimize_design(Problem):
         obj3 = design.volume  # Minimise weight (no_blades_rotor * blades_rotor_volume * blade_density + no_blades_stator * blades_stator_volume * blade_density)
 
         # Constraints, default orientation of constraints being met is < 0
+        const1 = max(design.delta_rotor) - 15
+        const2 = max(design.delta_stator) - 15
+        #const3 = max(design.Mach_rotor) - 1.05
         # const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
         # const2 = np.abs(design.CV_residual_stator) - 1e-6
 
         # Stacking Objectives to "F" and Constraints to "G"
         out["F"] = np.column_stack([obj1, obj2, obj3])
-        # out["G"] = np.column_stack([const1, const2])
-
+        out["G"] = np.column_stack([const1, const2])
 
 class optimize_plots:
     def __init__(self, result):
@@ -55,14 +49,9 @@ class optimize_plots:
     def pareto_front_scatter2(self):
         plt.scatter(self.F[:, 0], self.F[:, 1])
 
-
-class multi_criteria_decision_making:
-    X = 0
-
-
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,
-                 beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air,eta_tt_estimated,
+                 beta_tt, P0_cruise, T0_cruise, mdot, omega, hub_tip_ratio, gamma, R_air, eta_tt_estimated,
                  row_chord_spacing_ratio, lieblein_model, profile, methodology):
 
         # Assign properties
@@ -87,6 +76,7 @@ class Fan:
         self.profile = profile
         self.methodology = methodology
         self.eta_tt_estimated = eta_tt_estimated
+        self.titanium_blade_density = 4420  # [kg/m^3] This is referenced off Rolls-Royce Ti-6AL-4V, however also usually somewhat hollow.
 
         # Calculate inlet properties
         self.R_air = R_air
@@ -232,8 +222,12 @@ class Fan:
             # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
 
             # For the sake of testing assume constant tc
-            self.t_c_rotor = np.ones(self.no_points) * 0.15
-            self.t_c_stator = np.ones(self.no_points) * 0.15
+            self.t_c_rotor = np.ones(self.no_points) * 0.06
+            self.t_c_stator = np.ones(self.no_points) * 0.10
+
+            # For the sake of testing calculate ts ratio
+            self.t_s_rotor = self.solidity_rotor_distribution * self.t_c_rotor
+            self.t_s_stator = self.solidity_stator_distribution * self.t_c_stator
 
             # Calculate flow incidence, deviation, blade angles for both rotor and stator
             # Create array with ideal flow deflection for rotor
@@ -263,7 +257,6 @@ class Fan:
             Mach_0 = self.w_1 / np.sqrt(self.gamma * self.R_air * self.T_inlet)
             Mach_1 = self.v_2 / np.sqrt(self.R_air * self.gamma * self.T_exit_rotor)
             Mach_2 = self.M_exit_stator
-            print('M1, M2, M3:',Mach_0,Mach_1,Mach_2)
             self.mean_tc_rotor=self.t_c_rotor[self.rotor_mean_idx]
             self.mean_tc_stator=self.t_c_stator[self.stator_mean_idx]
             t_s_rotor=self.mean_tc_rotor*self.rotor_solidity_mean
@@ -290,18 +283,16 @@ class Fan:
             self.stator_loss=sum(self.calc_stator_loss(0.002,self.alpha_2,0,Mach_2,self.gamma,self.R_air,self.T_exit_rotor,camber_angle_mean_stator,t_s_stator,
                                                  -0.15,self.rho_exit_stator,self.v_2,self.c_mean_stator, spacing_stator))
 
-            #print('BL_loss =', self.dn_bl)
-            #print('Mixing loss =', self.dn_ml)
-            #print('Tip leakage loss =',self.dn_tl)
             # Update eta
             new_eta_tt=self.calc_eta_tt(self.stator_loss,self.rotor_loss,self.psi_mean,self.U_mean,self.w_1,self.v_2)
             difference = np.abs(new_eta_tt - self.eta_tt_estimated)
             self.eta_tt_estimated = new_eta_tt
-            print(self.eta_tt_estimated)
             n_iter += 1
 
         # Calculate weight and volume of stage
         self.volume = self.weight()
+        self.mass = self.volume * self.titanium_blade_density * 0.7
+
 
     def plot_meanline_vs_exit_props_differences(self):
         """
@@ -441,11 +432,18 @@ class Fan:
         # Calculate Mach
         Mach = v_inlet / np.sqrt(self.R_air * self.gamma * self.T_exit_rotor)
         return [alpha_2, v_inlet, alpha_1, solidity, DF, Mach]
-
-
     def stator_force(self):
-        Fm = self.solidity_stator_distribution * (self.P_exit_rotor - self.P_exit_rotor)
-        Ft = self.rho * self. * self.solidity_stator_distribution * (Vt1 - Vt2)
+        # Be Aware that these values are in SI units Newtons [N] kgm/s^2
+        Fm = self.solidity_stator_distribution * (self.P_exit_stator - self.P_exit_rotor)
+        Ft = self.mdot * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(self.alpha_2_stator_distribution))
+        return Fm, Ft
+    def rotor_force(self):
+        # Be Aware that these values are in SI units Newtons [N] kgm/s^2
+        Fm = (1/self.solidity_rotor_distribution) * (self.P_exit_rotor-self.P_inlet)
+        Ft = self.mdot * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(self.beta_2_rotor_distribution))
+        Fr = 0
+        return Fm, Ft
+
     def size_stator_thicknes(self):
         ...
         return ...  # t_c along blade radius, blade mass along the
@@ -580,10 +578,13 @@ class Fan:
 
         return BL_loss, shock_loss, mixing_loss,tip_loss,endwall_loss
 
-    def calc_stall_margin(self, mach_rel_out, mach_rel_in,t_th, beta, beta_blade):
+    def calc_stall_margin(self, mach_rel_out, mach_rel_in,t_s, beta, beta_blade):
+
+        # require M_rel, Beta_1, T1, P1
+
         # This function uses control volume method based off of C.Freeman's paper
         lhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_out ** 2)) ** (- 1 / 2)) * \
-          (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_th)) / (mach_rel_out * (1 - t_th))
+          (1 + self.gamma * (mach_rel_out ** 2) * (1 - t_s)) / (mach_rel_out * (1 - t_s))
         rhs = ((1 + (self.gamma - 1) / 2 * (mach_rel_in ** 2)) ** (- 1 / 2)) * \
           (np.cos(beta_blade) / np.cos(beta) + self.gamma * (mach_rel_in ** 2) * np.cos(beta - beta_blade)) / mach_rel_in
         residual = lhs - rhs
@@ -605,20 +606,20 @@ class Fan:
 class Fan_Plots:
     def __init__(self, Fan):
         self.Fan = Fan
-        self.plot_thermodynamic_properties()
+        #self.plot_thermodynamic_properties()
         self.plot_meridional_shape()
-        self.plot_distribution_at_blade()
-        self.plot_velocity_triangle(beta_1=self.Fan.beta_1, beta_2=self.Fan.beta_2, alpha_2=self.Fan.alpha_2,
-                                    U=self.Fan.U_mean, location="meanline")
-        self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[0],
-                                    beta_2=self.Fan.beta_2_rotor_distribution[0],
-                                    alpha_2=self.Fan.alpha_2_rotor_distribution[0],
-                                    U=self.Fan.U_rotor_distribution[0], location="hub")
-        self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[-1],
-                                    beta_2=self.Fan.beta_2_rotor_distribution[-1],
-                                    alpha_2=self.Fan.alpha_2_rotor_distribution[-1],
-                                    U=self.Fan.U_rotor_distribution[-1], location="tip")
-        self.print_data()
+        #self.plot_distribution_at_blade()
+        #self.plot_velocity_triangle(beta_1=self.Fan.beta_1, beta_2=self.Fan.beta_2, alpha_2=self.Fan.alpha_2,
+                                    #U=self.Fan.U_mean, location="meanline")
+        #self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[0],
+                                    #beta_2=self.Fan.beta_2_rotor_distribution[0],
+                                    #alpha_2=self.Fan.alpha_2_rotor_distribution[0],
+                                   # U=self.Fan.U_rotor_distribution[0], location="hub")
+        #self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[-1],
+                                    #beta_2=self.Fan.beta_2_rotor_distribution[-1],
+                                    #alpha_2=self.Fan.alpha_2_rotor_distribution[-1],
+                                    #U=self.Fan.U_rotor_distribution[-1], location="tip")
+        #self.print_data()
 
     def plot_thermodynamic_properties(self):
         fig, ax1 = plt.subplots()
