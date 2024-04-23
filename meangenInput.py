@@ -71,7 +71,7 @@ class MeangenCompressorInput:
             # set our own row/stage gaps or use defaults
             # NOTE: I don't know if we compute this as of right now
             if self.force_axial_gaps:
-                temp.write(f"{self.fan.spacing_rows :.5} 0.5\n")
+                temp.write(f"{self.fan.row_chord_spacing_ratio :.5f} 0.5\n")
             else:
                 temp.write("       0.14       0.500\n")
 
@@ -96,8 +96,6 @@ class MeangenCompressorInput:
                 geo_flow_area_stat = (self.fan.r_tip ** 2 - self.fan.r_hub_inlet_stator ** 2) * np.pi - (self.fan.r_tip - self.fan.r_hub_inlet_stator) \
                                      * self.fan.no_blades_stator * self.fan.t_c_stator[self.fan.stator_mean_idx] * self.fan.c_mean_stator
                 bf_stat = 1 - (geo_flow_area_stat - mom_thick_stat)
-                print(bf_rot, bf_stat)
-                exit()
                 temp.write(f"{bf_rot :.5f} {bf_stat :.5f} \n")
 
 
@@ -281,11 +279,11 @@ class RunCFD:
                 file.write(line)
 
 
+
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.80630558e+00, AR_stator=3.19673306e+00, taper_rotor=1.05025995e+00,
-               taper_stator=1.18320802e+00, n=9.05646605e-01, no_blades_rotor=23,
-               no_blades_stator=25, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-               hub_tip_ratio=3.99206152e-01, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.44214618 , AR_stator= 3.00467911, taper_rotor= 0.99972322, taper_stator= 0.67692271, n=  0.2035397 , no_blades_rotor=   38,
+             no_blades_stator= 40, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+             hub_tip_ratio= 0.2, gamma=1.4, R_air=287, eta_tt_estimated=0.9,  row_chord_spacing_ratio=1,
                lieblein_model=ml.Lieblein_Model(),
                profile="NACA-65", methodology="controlled vortex")
     cfd = RunCFD(f, "run")
@@ -295,8 +293,8 @@ if __name__ == "__main__":
     if usr in "yY":
         tm = PP.Turbomachine()
         tm.plot.convergence_history()
-        tm.plot.variable_B2B("M_rel")
-        tm.plot.variable_B2B("P")
+        tm.plot.variable_B2B("M_rel", 0.5, 10)
+        tm.plot.variable_B2B("P", 0.5, 10)
 
         usr = str(input("Type 'Y' to make Paraview files:\n"))
         if usr in "yY":
@@ -308,3 +306,5 @@ if __name__ == "__main__":
             tm.rows[0].N_instances = nrot
             tm.rows[1].N_instances = nrot
             tm.gen_ParaView_input()
+
+
