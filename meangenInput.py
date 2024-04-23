@@ -7,6 +7,7 @@ import meanline as ml
 import numpy as np
 import PostPy.Components as PP
 import scipy.interpolate as intrp
+import re
 
 
 def angle_between_vectors(v1, v2=np.array([1, 0])):
@@ -280,6 +281,34 @@ class RunCFD:
         with open("stagen.dat", "w") as file:
             for line in raw:
                 file.write(line)
+
+    def calc_losses(self):
+        with open("results.out") as file:
+            raw = file.readlines()
+        enthalpy_string=str(raw[-25])
+        temp_enthalpy = re.findall(r'[\d.]+', enthalpy_string)
+        enthalpy = list(map(float, temp_enthalpy))
+
+        massflow_string=str(raw[-26])
+        temp_massflow = re.findall(r'[\d.]+', massflow_string)
+        massflow_in, massflow_out = list(map(float, temp_massflow))
+
+        stag_temperature_string=str(raw[-27])
+        temp_stag_temperature = re.findall(r'[\d.]+', stag_temperature_string)
+        stag_temperature_in, stag_temperature_out  = list(map(float, temp_stag_temperature))
+
+        static_pres_string=str(raw[-28])
+        temp_static_pres = re.findall(r'[\d.]+', static_pres_string)
+        static_pres_in, static_pres_in = list(map(float, temp_static_pres))
+
+        stag_pres_string=str(raw[-29])
+        temp_stag_pres = re.findall(r'[\d.]+', stag_pres_string)
+        stag_pres_in, stag_pres__out = list(map(float, temp_stag_pres))
+
+        constants_string=str(raw[-35])
+        temp_constants = re.findall(r'[\d.]+', constants_string)
+        Cp, gamma, R = list(map(float, temp_constants))
+        return
 
 
 if __name__ == "__main__":
