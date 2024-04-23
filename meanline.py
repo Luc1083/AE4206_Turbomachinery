@@ -6,10 +6,15 @@ from pymoo.core.problem import ElementwiseProblem
 
 class optimize_design_elementwise(ElementwiseProblem):
     def __init__(self):
+        vars = {
+            "M_inlet": Binary(),
+            "x": Choice(options=["nothing", "multiply"]),
+            "y": Integer(bounds=(-2, 2)),
+            "z": Real(bounds=(-5, 5)),
 
         super().__init__(n_var=9,
                          n_obj=3,
-                         n_ieq_constr=6,
+                         n_ieq_constr=8,
                          xl=np.array([0.55, 2, 3, 0.5, 0.5, 0.2, 25, 25, 0.2]),
                          xu=np.array([0.7, 5, 5, 1.0, 1.5, 2.0, 50, 50, 0.5]))
 
@@ -19,7 +24,7 @@ class optimize_design_elementwise(ElementwiseProblem):
         design = Fan(Mach_inlet=x[0], AR_rotor=x[1], AR_stator=x[2], taper_rotor=x[3], taper_stator=x[4], n=x[5], no_blades_rotor=x[6],
              no_blades_stator=x[7], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000, hub_tip_ratio=x[8],
              gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=Lieblein_Model(),
-             profile="NACA-65", methodology='controlled vortex')
+             profile="DCA", methodology='controlled vortex')
 
         # Objective functions
         obj1 = 1 - design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated) / Maximise eta_tt_estimated
@@ -27,18 +32,20 @@ class optimize_design_elementwise(ElementwiseProblem):
         obj3 = design.volume_value * design.titanium_blade_density  # Minimise weight
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = max(design.delta_rotor) - 8
-        const2 = max(design.delta_stator) - 8
-        const3 = max(design.Mach_rotor) - 1.3
-        const4 = max(design.solidity_rotor_distribution) - 2
-        const5 = max(design.DF_rotor_distribution) - 0.45
-        const6 = max(design.DF_stator_distribution) - 0.45
+        const1 = max(design.delta_rotor) - 10
+        const2 = max(design.delta_stator) - 10
+        const3 = max(design.Mach_rotor) - 1.4
+        const4 = max(design.solidity_rotor_distribution) - 1.5
+        const5 = max(design.solidity_stator_distribution) - 1.5
+        const6 = max(design.DF_rotor_distribution) - 0.45
+        const7 = max(design.DF_stator_distribution) - 0.45
+
         # const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
         # const2 = np.abs(design.CV_residual_stator) - 1e-6
 
         # Stacking Objectives to "F" and Constraints to "G"
         out["F"] = np.column_stack([obj1, obj2, obj3])
-        out["G"] = np.column_stack([const1, const2, const3, const4, const5, const6])
+        out["G"] = np.column_stack([const1, const2, const3, const4, const5, const6, const7])
 
 class Fan:
     def __init__(self, Mach_inlet, AR_rotor, AR_stator, taper_rotor, taper_stator, n, no_blades_rotor, no_blades_stator,

@@ -46,7 +46,7 @@ lieblein_model = ml.Lieblein_Model()
 fan_optimisation_problem = ml.optimize_design_elementwise()
 
 algorithm = NSGA2(pop_size=50)
-termination = get_termination("n_gen", 150)
+termination = get_termination("n_gen", 100)
 
 result = minimize(problem=fan_optimisation_problem,
                   algorithm=algorithm,
@@ -56,8 +56,10 @@ result = minimize(problem=fan_optimisation_problem,
 
 X = result.X
 F = result.F
+G = result.G
 print(X)
 print(F)
+print(G)
 
 def write_array_to_file(file_path, array):
     try:
