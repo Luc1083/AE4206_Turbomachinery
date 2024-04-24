@@ -14,7 +14,7 @@ from pymoo.termination import get_termination
 # Create Fan class for input flow and machine geometry
 fan = ml.Fan(Mach_inlet=0.649130943375586, AR_rotor=4.272733772083409, AR_stator= 2.839584002741414, taper_rotor= 0.9999567519107465, taper_stator= 0.7629959090028685, n= 0.23583841910300954, no_blades_rotor=  35,
              no_blades_stator= 34, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-             hub_tip_ratio=  0.395424434389037, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=2, lieblein_model=lieblein_model,
+             hub_tip_ratio=  0.395424434389037, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=2, lieblein_model=ml.Lieblein_Model(),
              profile="NACA-65", methodology="controlled vortex", t_c_rotor=6, t_c_stator=8)
 
 
