@@ -14,17 +14,19 @@ class optimize_design_elementwise(ElementwiseProblem):
             "AR_stator": Real(bounds=(3, 5)),
             "taper_rotor": Real(bounds=(0.5, 1.0)),
             "taper_stator": Real(bounds=(0.5, 1.5)),
-            "n": Real(bounds=(0.2, 1.0)),
-            "N_R": Integer(bounds=(20, 50)),
-            "N_S": Integer(bounds=(20, 50)),
-            "hub_tip_ratio": Real(bounds=(0.2, 0.7)),
-            "t_c_rotor": Integer(bounds=(6, 10)),
-            "t_c_stator": Integer(bounds=(8, 12)),
+            "n": Real(bounds=(0, 1.0)),
+            "N_R": Integer(bounds=(20, 40)),
+            "N_S": Integer(bounds=(20, 40)),
+            "hub_tip_ratio": Real(bounds=(0.2, 0.5)),
+            "methodology": Choice(options=['controlled vortex', 'free vortex']),
+            "profile": Choice(options=['NACA-65', 'DCA']),
+            "t_c_rotor": Integer(bounds=(6, 12)),
+            "t_c_stator": Integer(bounds=(6, 12)),
         }
 
         super().__init__(vars=vars,
                          n_obj=3,
-                         n_ieq_constr=7,
+                         n_ieq_constr=8,
                          **kwargs)
 
     def _evaluate(self, X, out, *args, **kwargs):
@@ -34,7 +36,7 @@ class optimize_design_elementwise(ElementwiseProblem):
                      taper_rotor=X["taper_rotor"], taper_stator=X["taper_stator"], n=X["n"], no_blades_rotor=X["N_R"],
                      no_blades_stator=X["N_S"], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
                      hub_tip_ratio=X["hub_tip_ratio"],gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
-                     lieblein_model=Lieblein_Model(),profile="NACA-65", methodology='controlled vortex', t_c_rotor=X["t_c_rotor"],
+                     lieblein_model=Lieblein_Model(), profile=X["profile"], methodology=X["methodology"], t_c_rotor=X["t_c_rotor"],
                      t_c_stator=X["t_c_stator"])
 
         # Objective functions
@@ -43,20 +45,21 @@ class optimize_design_elementwise(ElementwiseProblem):
         obj3 = design.volume_value * design.titanium_blade_density  # Minimise weight
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = max(design.delta_rotor) - 8
-        const2 = max(design.delta_stator) - 8
+        const1 = max(design.delta_rotor) - 10
+        const2 = max(design.delta_stator) - 10
         const3 = max(design.Mach_rotor) - 1.4
-        const4 = max(design.solidity_rotor_distribution) - 1.5
-        const5 = max(design.solidity_stator_distribution) - 1.5
-        const6 = max(design.DF_rotor_distribution) - 0.45
-        const7 = max(design.DF_stator_distribution) - 0.45
+        const4 = max(design.solidity_rotor_distribution) - 1.6
+        const5 = max(design.solidity_stator_distribution) - 1.6
+        const6 = max(design.DF_rotor_distribution) - 0.6
+        const7 = max(design.DF_stator_distribution) - 0.6
+        const8 = design.max_stress_rotor - 880e6
 
         # const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
         # const2 = np.abs(design.CV_residual_stator) - 1e-6
 
         # Stacking Objectives to "F" and Constraints to "G"
         out["F"] = np.column_stack([obj1, obj2, obj3])
-        out["G"] = np.column_stack([const1, const2, const3, const4, const5, const6, const7])
+        out["G"] = np.column_stack([const1, const2, const3, const4, const5, const6, const7, const8])
 
 
 class Fan:
@@ -194,7 +197,7 @@ class Fan:
                 self.b_rotor = self.map_radius_in_to_out(self.r_mean_rotor) * self.vt_2 / 2
                 self.a_rotor = self.vt_2 / (2 * self.map_radius_in_to_out(self.r_mean_rotor) ** n)
             elif self.methodology == "free vortex":
-                self.b_rotor = self.vt_2 / (self.map_radius_in_to_out(self.r_mean_rotor) ** self.n)
+                self.b_rotor = self.vt_2 / (self.map_radius_in_to_out(self.r_mean_rotor))
                 self.a_rotor = 0
 
             # Find parameters for stator
@@ -202,7 +205,7 @@ class Fan:
                 self.b_stator = - self.v_2 * np.sin(self.alpha_2) * self.r_mean_rotor / 2
                 self.a_stator = self.v_2 * np.sin(self.alpha_2) / (2 * self.r_mean_rotor ** n)
             elif self.methodology == "free vortex":
-                self.a_stator = self.vt_2 / (self.r_mean_rotor ** self.n)
+                self.a_stator = self.vt_2 / (self.r_mean_rotor)
                 self.b_stator = 0
 
             # Calculate distribution of angles and velocities for rotor
@@ -262,7 +265,7 @@ class Fan:
             self.stator_blade_beta2 = self.alpha_2_stator_distribution + self.delta_stator * np.pi / 180
 
             # Calculate forces and stresses
-            self.Fm_stator, self.Ft_stator, self.Mt_stator, self.max_stress_stator = self.stator_force()
+            self.Fm_stator, self.Ft_stator, self.Mt_stator = self.stator_force()
             self.Fm_rotor, self.Ft_rotor, self.Fr_rotor, self.Mt_rotor, self.max_stress_rotor = self.rotor_force()
 
 
@@ -373,7 +376,7 @@ class Fan:
             b = self.map_radius_in_to_out(self.r_mean_rotor) * self.vt_2 / 2
             a = self.vt_2 / (2 * self.map_radius_in_to_out(self.r_mean_rotor) ** self.n)
         elif methodology == "free vortex":
-            b = self.vt_2 / (self.map_radius_in_to_out(self.r_mean_rotor) ** self.n)
+            b = self.vt_2 / (self.map_radius_in_to_out(self.r_mean_rotor))
             a = 0
         alpha_1 = np.zeros(np.shape(r)[0])
         # Get U
@@ -385,7 +388,7 @@ class Fan:
         if methodology == "controlled vortex":
             vt_2 = a * (r ** self.n) + (b / r)
         elif methodology == "free vortex":
-            vt_2 = b * r ** self.n
+            vt_2 = b * r
         v_2 = np.sqrt(vt_2 ** 2 + self.v_axial ** 2)
         alpha_2 = np.arctan(vt_2 / self.v_axial)
         # Get w_2, beta_2
@@ -417,7 +420,7 @@ class Fan:
         if methodology == "controlled vortex":
             vt_2 = a * (r ** self.n) + (b / self.map_radius_in_to_out(r))
         elif methodology == "free vortex":
-            vt_2 = b * self.map_radius_in_to_out(r) ** self.n
+            vt_2 = b * self.map_radius_in_to_out(r)
         v_2 = np.sqrt(vt_2 ** 2 + self.v_axial ** 2)
         alpha_2 = np.arctan(vt_2 / self.v_axial)
         # Get w_2, beta_2
@@ -444,7 +447,7 @@ class Fan:
         if methodology == "controlled vortex":
             vt_inlet = a * r ** self.n - b / r
         elif methodology == "free vortex":
-            vt_inlet = a * r ** self.n
+            vt_inlet = a * r
         v_inlet = np.sqrt(self.v_axial ** 2 + vt_inlet ** 2)
         alpha_1 = np.arctan(vt_inlet / self.v_axial)
         # Calculate DF
@@ -467,10 +470,7 @@ class Fan:
             self.alpha_2_stator_distribution)))
         Mt = sum(mdot_s * (self.v_axial * np.tan(self.alpha_1_stator_distribution) - self.v_axial * np.tan(
             self.alpha_2_stator_distribution)) * self.r_stator)
-        t_root = self.t_c_stator * self.c_hub_stator
-        I_root = (self.c_hub_stator * t_root**3) / 12
-        max_stress = Mt * t_root / (2 * I_root)
-        return Fm, Ft, Mt, max_stress
+        return Fm, Ft, Mt
 
     def rotor_force(self):
         # Be Aware that these values are in SI units Newtons [N] kgm/s^2
@@ -486,10 +486,10 @@ class Fan:
                     self.omega * 2 * np.pi / 60) ** 2
         Mt = sum(mdot_s * (self.v_axial * np.tan(self.beta_1_rotor_distribution) - self.v_axial * np.tan(
             self.beta_2_rotor_distribution)) * self.r_rotor)
-        t_root = self.t_c_rotor * self.c_hub_rotor
+        t_root = self.t_c_rotor[0] * self.c_hub_rotor
         A_root = t_root * self.c_hub_rotor
         I_root = (self.c_hub_rotor * t_root ** 3) / 12
-        max_stress = Mt * t_root / (2 * I_root) + Fr / A_root
+        max_stress = Fr / A_root
         return Fm, Ft, Fr, Mt, max_stress
 
     def size_stator_thicknes(self):
