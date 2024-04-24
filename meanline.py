@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as intrp
 from pymoo.core.problem import ElementwiseProblem
-from pymoo.core.variable import Real, Integer
+from pymoo.core.variable import Real, Integer, Choice
 
 
 class optimize_design_elementwise(ElementwiseProblem):
@@ -18,6 +18,8 @@ class optimize_design_elementwise(ElementwiseProblem):
             "N_R": Integer(bounds=(20, 50)),
             "N_S": Integer(bounds=(20, 50)),
             "hub_tip_ratio": Real(bounds=(0.2, 0.7)),
+            "t_c_rotor": Integer(bounds=(6, 10)),
+            "t_c_stator": Integer(bounds=(8, 12)),
         }
 
         super().__init__(vars=vars,
@@ -31,10 +33,9 @@ class optimize_design_elementwise(ElementwiseProblem):
         design = Fan(Mach_inlet=X["M_inlet"], AR_rotor=X["AR_rotor"], AR_stator=X["AR_stator"],
                      taper_rotor=X["taper_rotor"], taper_stator=X["taper_stator"], n=X["n"], no_blades_rotor=X["N_R"],
                      no_blades_stator=X["N_S"], beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-                     hub_tip_ratio=X["hub_tip_ratio"],
-                     gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
-                     lieblein_model=Lieblein_Model(),
-                     profile="NACA-65", methodology='controlled vortex')
+                     hub_tip_ratio=X["hub_tip_ratio"],gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5,
+                     lieblein_model=Lieblein_Model(),profile="NACA-65", methodology='controlled vortex', t_c_rotor=X["t_c_rotor"],
+                     t_c_stator=X["t_c_stator"])
 
         # Objective functions
         obj1 = 1 - design.eta_tt_estimated  # Minimise (1 - eta_tt_estimated) / Maximise eta_tt_estimated
@@ -231,8 +232,8 @@ class Fan:
             # [self.t_c_rotor, self.rotor_blade_mass] = self.size_rotor_thicknes()
 
             # For the sake of testing assume constant tc
-            self.t_c_rotor = t_c_rotor
-            self.t_c_stator = t_c_stator
+            self.t_c_rotor = np.ones(self.no_points) * float(t_c_rotor) * 10**-2
+            self.t_c_stator = np.ones(self.no_points) * float(t_c_stator) * 10**-2
 
             # For the sake of testing calculate ts ratio
             self.t_s_rotor = self.solidity_rotor_distribution * self.t_c_rotor
