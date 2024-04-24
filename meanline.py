@@ -9,19 +9,19 @@ from pymoo.core.variable import Real, Integer, Choice
 class optimize_design_elementwise(ElementwiseProblem):
     def __init__(self, **kwargs):
         vars = {
-            "M_inlet": Real(bounds=(0.55, 0.7)),
-            "AR_rotor": Real(bounds=(2, 6)),
-            "AR_stator": Real(bounds=(2, 6)),
-            "taper_rotor": Real(bounds=(0.3, 1.0)),
-            "taper_stator": Real(bounds=(0.3, 1.0)),
-            "n": Real(bounds=(0, 2.0)),
+            "M_inlet": Real(bounds=(0.55, 0.65)),
+            "AR_rotor": Real(bounds=(2, 5)),
+            "AR_stator": Real(bounds=(2, 5)),
+            "taper_rotor": Real(bounds=(0.5, 1.0)),
+            "taper_stator": Real(bounds=(0.25, 1.0)),
+            "n": Real(bounds=(0.2, 1.0)),
             "N_R": Integer(bounds=(20, 40)),
             "N_S": Integer(bounds=(20, 40)),
-            "hub_tip_ratio": Real(bounds=(0.2, 0.4)),
+            "hub_tip_ratio": Real(bounds=(0.1, 0.4)),
             "methodology": Choice(options=['controlled vortex', 'free vortex']),
             "profile": Choice(options=['NACA-65', 'DCA']),
             "t_c_rotor": Integer(bounds=(6, 12)),
-            "t_c_stator": Integer(bounds=(6, 12)),
+            "t_c_stator": Integer(bounds=(8, 12)),
         }
 
         super().__init__(vars=vars,
@@ -45,14 +45,14 @@ class optimize_design_elementwise(ElementwiseProblem):
         obj3 = design.volume_value * design.titanium_blade_density  # Minimise weight
 
         # Constraints, default orientation of constraints being met is < 0
-        const1 = (max(design.delta_rotor) - 10)/10
-        const2 = (max(design.delta_stator) - 10)/10
-        const3 = (max(design.Mach_rotor) - 1.4)/1.4
-        const4 = (max(design.solidity_rotor_distribution) - 1.6)/1.6
-        const5 = (max(design.solidity_stator_distribution) - 1.6)/1.6
-        const6 = (max(design.DF_rotor_distribution) - 0.6)/0.6
-        const7 = (max(design.DF_stator_distribution) - 0.6)/0.6
-        const8 = (design.max_stress_rotor - 880e6)/880e6
+        const1 = max(design.delta_rotor) - 11
+        const2 = max(design.delta_stator) - 11
+        const3 = max(design.Mach_rotor) - 1.4
+        const4 = max(design.solidity_rotor_distribution) - 1.6
+        const5 = max(design.solidity_stator_distribution) - 1.6
+        const6 = max(design.DF_rotor_distribution) - 0.6
+        const7 = max(design.DF_stator_distribution) - 0.6
+        const8 = design.max_stress_rotor - 880e6
 
         # const1 = np.abs(design.CV_residual_rotor) - 1e-6 # residual of C.Freeman CV should be smaller than 1e-6 to have design that does not have choking.
         # const2 = np.abs(design.CV_residual_stator) - 1e-6
@@ -580,6 +580,7 @@ class Fan:
 
     def calc_eta_tt(self, stator_loss, rotor_loss, psi, U, w_1, v_2):
         eta_tt = 1 - (1 / (2 * psi)) * ((stator_loss * v_2 ** 2) + (rotor_loss * w_1 ** 2)) / U ** 2
+
         return eta_tt
 
     # diff loss method:
