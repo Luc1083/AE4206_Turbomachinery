@@ -146,6 +146,11 @@ class Fan:
             self.v_2 = self.v_axial / np.cos(self.alpha_2)
             self.w_2 = self.v_axial / np.cos(self.beta_2)
 
+            # Calculate power, change in enthalpy , eta_ts
+            self.specific_power = self.Cp * (self.T0_exit_rotor - self.T0_inlet)
+            self.power = self.specific_power * self.mdot
+            self.eta_ts = self.specific_power / (self.Cp * (self.T0_exit_rotor - self.T0_inlet) + 0.5 * self.v_2**2)
+
             # Calculate intermediate static properties after rotor
             [self.T_exit_rotor, self.M_exit_rotor, self.P_exit_rotor, self.rho_exit_rotor] = (
                 self.calc_intermediate_properties(self.v_2, self.T0_exit_rotor, self.P0_exit_rotor))
@@ -492,14 +497,6 @@ class Fan:
         max_stress = Fr / A_root
         return Fm, Ft, Fr, Mt, max_stress
 
-    def size_stator_thicknes(self):
-        ...
-        return ...  # t_c along blade radius, blade mass along the
-
-    def size_rotor_thicknes(self):
-        ...
-        return ...  # t_c along blade radius, blade mass along the
-
     def calc_mixing_loss(self, DF_stator, DF_rotor, solidity_stator, solidity_rotor, beta_1, alpha_2, theta, psi,
                          beta_2, alpha_3,
                          rho, dynamic_viscosity, w1, v2, chord_stator, chord_rotor, mach_rotor, mach_stator):
@@ -583,7 +580,6 @@ class Fan:
 
     def calc_eta_tt(self, stator_loss, rotor_loss, psi, U, w_1, v_2):
         eta_tt = 1 - (1 / (2 * psi)) * ((stator_loss * v_2 ** 2) + (rotor_loss * w_1 ** 2)) / U ** 2
-
         return eta_tt
 
     # diff loss method:
@@ -673,20 +669,20 @@ class Fan:
 class Fan_Plots:
     def __init__(self, Fan):
         self.Fan = Fan
-        # self.plot_thermodynamic_properties()
+        self.plot_thermodynamic_properties()
         self.plot_meridional_shape()
-        # self.plot_distribution_at_blade()
-        # self.plot_velocity_triangle(beta_1=self.Fan.beta_1, beta_2=self.Fan.beta_2, alpha_2=self.Fan.alpha_2,
-        # U=self.Fan.U_mean, location="meanline")
-        # self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[0],
-        # beta_2=self.Fan.beta_2_rotor_distribution[0],
-        # alpha_2=self.Fan.alpha_2_rotor_distribution[0],
-        # U=self.Fan.U_rotor_distribution[0], location="hub")
-        # self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[-1],
-        # beta_2=self.Fan.beta_2_rotor_distribution[-1],
-        # alpha_2=self.Fan.alpha_2_rotor_distribution[-1],
-        # U=self.Fan.U_rotor_distribution[-1], location="tip")
-        # self.print_data()
+        self.plot_distribution_at_blade()
+        self.plot_velocity_triangle(beta_1=self.Fan.beta_1, beta_2=self.Fan.beta_2, alpha_2=self.Fan.alpha_2,
+        U=self.Fan.U_mean, location="meanline")
+        self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[0],
+        beta_2=self.Fan.beta_2_rotor_distribution[0],
+        alpha_2=self.Fan.alpha_2_rotor_distribution[0],
+        U=self.Fan.U_rotor_distribution[0], location="hub")
+        self.plot_velocity_triangle(beta_1=self.Fan.beta_1_rotor_distribution[-1],
+        beta_2=self.Fan.beta_2_rotor_distribution[-1],
+        alpha_2=self.Fan.alpha_2_rotor_distribution[-1],
+        U=self.Fan.U_rotor_distribution[-1], location="tip")
+        self.print_data()
 
     def plot_thermodynamic_properties(self):
         fig, ax1 = plt.subplots()
@@ -705,13 +701,14 @@ class Fan_Plots:
 
         # Plot pressures
         ax2.plot([self.Fan.x_rotor_hub_inlet, (self.Fan.x_rotor_hub_outlet + self.Fan.x_stator_hub_inlet) / 2,
-                  self.Fan.x_stator_hub_outlet], [self.Fan.P0_inlet, self.Fan.P0_exit_rotor, self.Fan.P0_exit_rotor],
+                  self.Fan.x_stator_hub_outlet], [self.Fan.P0_inlet/1000, self.Fan.P0_exit_rotor/1000, self.Fan.P0_exit_rotor/1000],
                  label="Total pressure")
         ax2.plot([self.Fan.x_rotor_hub_inlet, (self.Fan.x_rotor_hub_outlet + self.Fan.x_stator_hub_inlet) / 2,
-                  self.Fan.x_stator_hub_outlet], [self.Fan.P_inlet, self.Fan.P_exit_rotor, self.Fan.P_exit_stator],
+                  self.Fan.x_stator_hub_outlet], [self.Fan.P_inlet/1000, self.Fan.P_exit_rotor/1000, self.Fan.P_exit_stator/1000],
                  label="Static pressure")
-        ax2.set_ylabel("Pressure (Pa)")
+        ax2.set_ylabel("Pressure (kPa)")
 
+        ax1.set_title('Thermodynamic properties along compressor length')
         ax1.minorticks_on()
         ax1.grid(which='major', color='#DDDDDD', linewidth=0.8)
         ax1.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.8)
@@ -742,13 +739,12 @@ class Fan_Plots:
                   self.Fan.r_mean_inlet_stator, self.Fan.r_mean_outlet_stator], label="Meanline",
                  linestyle='--', color="red")
 
+        plt.title("Meridional shape")
         plt.xlabel("Axial length (m)")
         plt.ylabel("Radius (m)")
         plt.minorticks_on()
         plt.grid(which='major', color='#DDDDDD', linewidth=0.8)
         plt.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.8)
-        plt.legend()
-        plt.axis('scaled')
         plt.savefig(f'meridional_shape.png')
         plt.show()
 
@@ -865,6 +861,18 @@ class Fan_Plots:
         print(f"Thermodynamic properties at meanline after stator are: P0={self.Fan.P0_exit_rotor} Pa, "
               f"T0={self.Fan.T0_exit_rotor} K, P={self.Fan.P_exit_stator} Pa, T={self.Fan.T_exit_stator} K, "
               f"M={self.Fan.M_exit_stator}")
+
+        print(f"eta_tt = {self.Fan.eta_tt_estimated}")
+        print(f"eta_ts = {self.Fan.eta_ts}")
+        print(f"rotor loss = {self.Fan.rotor_loss}")
+        print(f"stator loss = {self.Fan.stator_loss}")
+
+        print(f"M_stator = {self.Fan.Fm_stator/1000} kN")
+        print(f"T_stator = {self.Fan.Ft_stator/1000} kN")
+
+        print(f"M_rotor = {self.Fan.Fm_rotor/1000} kN")
+        print(f"T_rotor = {self.Fan.Ft_rotor/1000} kN")
+        print(f"R_rotor = {self.Fan.Fr_rotor/1000} kN")
 
 
 def fix_extrapolation_spline(betas: (np.ndarray, list), solidity: np.ndarray, interpolator, n: int = 8) \
