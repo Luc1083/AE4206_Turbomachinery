@@ -16,7 +16,7 @@ def angle_between_vectors(v1, v2=np.array([1, 0])):
 
 class MeangenCompressorInput:
     def __init__(self, fan: ml.Fan, force_axial_chords: bool = True, force_axial_gaps: bool = True,
-                 force_blockage_factors: bool = True, force_deviation: bool = True, force_eta: bool = True,
+                 force_blockage_factors: bool = False, force_deviation: bool = True, force_eta: bool = True,
                  force_incidence: bool = True, force_twist_factor: bool = True, force_blade_tc_loc: bool = True,
                  force_q0: bool = True, exec_extension=""):
         """
@@ -54,12 +54,13 @@ class MeangenCompressorInput:
             temp.write("1\n")  # set number of stages
             temp.write("M\n")  # specify design at mean line
             temp.write(f"{self.fan.omega}\n")  # fan RPM
-            temp.write(f"{self.fan.mdot :.3f}\n")  # fan mass flow
+            temp.write(f"87\n")  # fan mass flow
             temp.write("A\n")  # specify that duty coefficients will be provided
 
             temp.write(
                 f"{self.fan.R_mean :.3f}, {self.fan.theta_rotor_distribution[self.fan.rotor_mean_idx]:.3f}, "
-                f"{self.fan.psi_mean :.3f}\n")  # provide duty coeffs: reaction, flow, loading
+                #f"{self.fan.psi_mean :.3f}\n")  # provide duty coeffs: reaction, flow, loading
+                f"0.6\n")  # provide duty coeffs: reaction, flow, loading
             temp.write("A\n")  # set method to specify mean radius
             temp.write(f"{self.fan.r_mean_rotor :.5}\n")  # specify mean radius in meters
 
@@ -165,14 +166,14 @@ class MeangenCompressorInput:
                               "replace the 0.4 below if I'm wrong\n")
                 temp.write("N\n")  # do not accept defaults
                 # rotor
-                temp.write(f"{self.fan.t_c_rotor[0]} {0.4 :.5}\n")  # root
-                temp.write(f"{self.fan.t_c_rotor[self.fan.rotor_mean_idx]} {0.4 :.5}\n")  # mid
-                temp.write(f"{self.fan.t_c_rotor[-1]} {0.4 :.5}\n")  # tip
+                temp.write(f"{self.fan.t_c_rotor[0]} {0.35 :.5}\n")  # root
+                temp.write(f"{self.fan.t_c_rotor[self.fan.rotor_mean_idx]} {0.35 :.5}\n")  # mid
+                temp.write(f"{self.fan.t_c_rotor[-1]} {0.35 :.5}\n")  # tip
 
                 temp.write("N\n")  # do not accept defaults
-                temp.write(f"{self.fan.t_c_stator[0] :.5} {0.45 :.5}\n")  # root
-                temp.write(f"{self.fan.t_c_stator[self.fan.stator_mean_idx] :.5} {0.45 :.5}\n")  # mid
-                temp.write(f"{self.fan.t_c_stator[-1] :.5} {0.45 :.5}\n")  # tip
+                temp.write(f"{self.fan.t_c_stator[0] :.5} {0.35 :.5}\n")  # root
+                temp.write(f"{self.fan.t_c_stator[self.fan.stator_mean_idx] :.5} {0.35 :.5}\n")  # mid
+                temp.write(f"{self.fan.t_c_stator[-1] :.5} {0.35 :.5}\n")  # tip
                 warnings.warn("I'm assuming the sections 1, 2, and 3 map to the root, mean, and tip sections. "
                               "If you see this warning that means I have not checked it yet.\n")
             else:
@@ -299,25 +300,33 @@ class RunCFD:
 
         static_pres_string=str(raw[-28])
         temp_static_pres = re.findall(r'[\d.]+', static_pres_string)
-        static_pres_in, static_pres_in = list(map(float, temp_static_pres))
+        static_pres_in, static_pres_out = list(map(float, temp_static_pres))
 
         stag_pres_string=str(raw[-29])
         temp_stag_pres = re.findall(r'[\d.]+', stag_pres_string)
-        stag_pres_in, stag_pres__out = list(map(float, temp_stag_pres))
+        stag_pres_in, stag_pres_out = list(map(float, temp_stag_pres))
 
         constants_string=str(raw[-35])
         temp_constants = re.findall(r'[\d.]+', constants_string)
         Cp, gamma, R = list(map(float, temp_constants))
+
+        temp=str(raw[-1])
+        temp_values = re.findall(r'[\d.]+', temp)
+        step,emax,I,J,K,eavg,econt,j2,vref,vmax,i2,j3,k3,mass_in,mass_out,rat_flow = list(map(float, temp_values))
+
+        Entropy_change=Cp*np.log(stag_temperature_out/stag_temperature_in)-R*np.log(stag_pres_out/stag_pres_in)
+        shock_loss=Entropy_change/(R*((static_pres_out-static_pres_in)/static_pres_in))
+        rho=self.fan.rho_inlet
+        BL_loss=(stag_pres_out-stag_pres_in)/(0.5*rho*vref**2)
+
         return
 
 
 if __name__ == "__main__":
-    f = ml.Fan(Mach_inlet=0.6, AR_rotor=4.44214618, AR_stator=3.00467911, taper_rotor=0.99972322,
-               taper_stator=0.67692271, n=0.2035397, no_blades_rotor=38,
-               no_blades_stator=40, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
-               hub_tip_ratio=0.2, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=1,
-               lieblein_model=ml.Lieblein_Model(),
-               profile="NACA-65", methodology="controlled vortex")
+    f = ml.Fan(Mach_inlet=0.649130943375586, AR_rotor=4.272733772083409, AR_stator= 2.839584002741414, taper_rotor= 0.9999567519107465, taper_stator=0.7629959090028685 , n=0.23583841910300954, no_blades_rotor=   35,
+             no_blades_stator= 34, beta_tt=1.6, P0_cruise=39513.14, T0_cruise=250.13, mdot=80, omega=5000,
+             hub_tip_ratio= 0.45662470069456773, gamma=1.4, R_air=287, eta_tt_estimated=0.9, row_chord_spacing_ratio=0.5, lieblein_model=ml.Lieblein_Model(),
+             profile="NACA-65", methodology="controlled vortex", t_c_rotor=6, t_c_stator=8)
     cfd = RunCFD(f, "run")
     cfd.run_all()
 
