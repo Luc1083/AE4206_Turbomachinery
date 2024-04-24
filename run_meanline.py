@@ -51,10 +51,6 @@ print("\nAxial / Meridional Force: \n", Fm_s/1000)
 print("\nTangential Force: \n", Ft_s/1000)
 print('\nMoment: ', Mt_s)
 
-print('\nDifference stress + yield - Stator', Max_stress_s - 880e6)
-
-
-
 
 # Optimiser Section of run_meanline.py
 fan_optimisation_problem = ml.optimize_design_elementwise()
